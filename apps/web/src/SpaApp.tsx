@@ -220,6 +220,13 @@ export default function SpaApp() {
     await loadCredentials(route.applicationId);
   }
 
+  async function copyValue(value: string | undefined, label: string) {
+    if (!value) return;
+    setError('');
+    await navigator.clipboard.writeText(value);
+    setNotice(`${label} copied.`);
+  }
+
   if (!user) return <div className="screen center">Loading CalDAV Bridge...</div>;
 
   return (
@@ -351,11 +358,31 @@ export default function SpaApp() {
                     </div>
                     <div>
                       <span>Redirect URI</span>
-                      <code>{selectedApplication.oauth2RedirectUri}</code>
+                      <div className="copy-value">
+                        <code>{selectedApplication.oauth2RedirectUri}</code>
+                        <button
+                          className="secondary copy-button"
+                          disabled={!selectedApplication.oauth2RedirectUri}
+                          aria-label="Copy Redirect URI"
+                          onClick={() => copyValue(selectedApplication.oauth2RedirectUri, 'Redirect URI').catch((copyError) => setError(copyError.message))}
+                        >
+                          Copy
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <span>CalDAV URL</span>
-                      <code>{selectedApplication.caldavBaseUrl}</code>
+                      <div className="copy-value">
+                        <code>{selectedApplication.caldavBaseUrl}</code>
+                        <button
+                          className="secondary copy-button"
+                          disabled={!selectedApplication.caldavBaseUrl}
+                          aria-label="Copy CalDAV URL"
+                          onClick={() => copyValue(selectedApplication.caldavBaseUrl, 'CalDAV URL').catch((copyError) => setError(copyError.message))}
+                        >
+                          Copy
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </section>

@@ -18,6 +18,7 @@ label { display: grid; gap: .35rem; margin-bottom: .95rem; color: #b8c7df; font-
 input, select { width: 100%; min-width: 0; border: 1px solid #33425f; border-radius: 10px; padding: .72rem .8rem; background: #0d1426; color: #eef4ff; }
 button { border: 0; border-radius: 10px; padding: .72rem .9rem; background: #06b6d4; color: #041018; font-weight: 750; cursor: pointer; }
 button:hover { background: #67e8f9; }
+button:disabled { cursor: not-allowed; opacity: .55; }
 small, .muted { color: #9fb0ca; }
 code { display: inline-block; max-width: 100%; word-break: break-word; overflow-wrap: anywhere; color: #a7f3d0; }
 table { width: 100%; min-width: 720px; border-collapse: collapse; margin-top: .5rem; }
@@ -56,6 +57,9 @@ th { color: #9fb0ca; font-size: .8rem; text-transform: uppercase; letter-spacing
 .detail-list { display: grid; gap: .85rem; min-width: 0; }
 .detail-list > div { min-width: 0; display: grid; gap: .25rem; padding-bottom: .85rem; border-bottom: 1px solid #26344f; }
 .detail-list span { color: #9fb0ca; font-size: .82rem; }
+.copy-value { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.copy-value code { flex: 1; min-width: 0; }
+.copy-button { flex: 0 0 auto; padding: .45rem .65rem; font-size: .8rem; }
 .credential-row input { flex: 1; }
 .secret { margin: .9rem 0; padding: .9rem; border-radius: 12px; background: #172554; display: grid; gap: .4rem; }
 .table-wrap { width: 100%; overflow-x: auto; }

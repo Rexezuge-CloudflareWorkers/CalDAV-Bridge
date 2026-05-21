@@ -20,7 +20,7 @@
     "eslint": "^10.4.x",
     "eslint-config-prettier": "^10.1.x",
     "eslint-plugin-prettier": "^5.5.x",
-    "globals": "^17.5.x",
+    "globals": "^17.6.x",
     "jsonc-parser": "^3.3.1",
     "prettier": "^3.8.x",
     "tailwindcss": "^4.3.x",
@@ -30,7 +30,7 @@
     "typescript-eslint": "^8.59.x",
     "vite": "^8.0.x",
     "vitest": "^4.1.7",
-    "wrangler": "^4.90.1"
+    "wrangler": "^4.93.1"
   },
-  "packageManager": "pnpm@10.12.4"
+  "packageManager": "pnpm@11.2.2"
 }

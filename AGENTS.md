@@ -32,3 +32,25 @@ volta run pnpm run typegen
 
 - `google-calendar` / `oauth2`
 - `microsoft-outlook-calendar` / `oauth2`
+
+## Git Commit Messages
+
+- Use Conventional Commits with this subject format: `<TYPE>[optional scope]: <description>`.
+- Write the type in uppercase, for example `FIX`, `FEAT`, `DOCS`, `STYLE`, `REFACTOR`, `TEST`, `BUILD`, `CHORE`.
+- Write the optional scope in lowercase inside parentheses, for example `FEAT(runtime): Add Scheduled Job Status`.
+- Write the description as concise human-readable words with spaces, capitalizing the first letter of each word.
+- When creating a commit from `main`, first switch to a new branch generated from the planned commit subject.
+- Use lowercase slash-separated branch names: `type/description` when there is no scope, or `type/scope/description` when there is a scope.
+- Convert the description to kebab-case for the branch, for example `docs/latest-agents-context-reflection`.
+- Use Markdown for optional commit bodies, separated from the subject by a blank line.
+- Use optional footers after the body, separated by a blank line, following git trailer-style formatting.
+- Use `FIX` for bug patches and `FEAT` for new features; other conventional types are allowed when they better describe the change.
+- Mark breaking API changes with `!` after the type or scope, or with a `BREAKING CHANGE: <description>` footer.
+
+```text
+<TYPE>[optional scope]: <description>
+
+[optional body in Markdown]
+
+[optional footer(s)]
+```

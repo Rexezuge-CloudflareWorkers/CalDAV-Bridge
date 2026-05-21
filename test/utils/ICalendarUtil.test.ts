@@ -17,4 +17,17 @@ describe('ICalendarUtil', () => {
     expect(parsed.summary).toBe('Planning');
     expect(parsed.location).toBe('Conference Room');
   });
+
+  it('emits and parses recurrence rules', () => {
+    const ics = ICalendarUtil.toICS({
+      uid: 'event-1@example.test',
+      summary: 'Weekly sync',
+      start: { dateTime: '2026-05-04T10:00:00Z' },
+      end: { dateTime: '2026-05-04T10:30:00Z' },
+      recurrence: ['RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;COUNT=5'],
+    });
+
+    expect(ics).toContain('RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;COUNT=5');
+    expect(ICalendarUtil.fromICS(ics, 'fallback').recurrence).toEqual(['RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;COUNT=5']);
+  });
 });

@@ -51,6 +51,56 @@ describe('CalendarProviderUtil', () => {
     expect(url.searchParams.get('endDateTime')).toBe('2026-06-01T00:00:00Z');
   });
 
+  it('maps Microsoft weekly recurrence to iCalendar RRULE', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        value: [
+          {
+            id: 'series-master',
+            iCalUId: 'series-master@example.test',
+            subject: 'Weekly sync',
+            start: { dateTime: '2026-05-04T10:00:00.0000000', timeZone: 'UTC' },
+            end: { dateTime: '2026-05-04T10:30:00.0000000', timeZone: 'UTC' },
+            recurrence: {
+              pattern: { type: 'weekly', interval: 2, daysOfWeek: ['monday', 'wednesday'], firstDayOfWeek: 'monday' },
+              range: { type: 'numbered', startDate: '2026-05-04', numberOfOccurrences: 5 },
+            },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
+
+    expect(events[0]?.recurrence).toEqual(['RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;WKST=MO;COUNT=5']);
+  });
+
+  it('maps Microsoft relative monthly recurrence to iCalendar RRULE', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        value: [
+          {
+            id: 'series-master',
+            iCalUId: 'series-master@example.test',
+            subject: 'Monthly review',
+            start: { dateTime: '2026-05-14T10:00:00.0000000', timeZone: 'UTC' },
+            end: { dateTime: '2026-05-14T10:30:00.0000000', timeZone: 'UTC' },
+            recurrence: {
+              pattern: { type: 'relativeMonthly', interval: 1, daysOfWeek: ['thursday'], index: 'second' },
+              range: { type: 'endDate', startDate: '2026-05-14', endDate: '2026-12-31' },
+            },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
+
+    expect(events[0]?.recurrence).toEqual(['RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=2TH;UNTIL=20261231T235959Z']);
+  });
+
   it('retries short Microsoft Graph throttles', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

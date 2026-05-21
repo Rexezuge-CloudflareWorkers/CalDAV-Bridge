@@ -4,6 +4,9 @@ import type { CalendarEvent, ProviderCalendar } from '@caldav-bridge/shared/mode
 import { HttpError } from './HttpError';
 
 class CalendarProviderUtil {
+  private static readonly maxThrottleRetryAttempts = 2;
+  private static readonly maxRetryAfterSeconds = 2;
+
   public static async getProfile(providerId: ProviderId | string, accessToken: string): Promise<{ emailAddress: string }> {
     if (providerId === PROVIDER_GOOGLE_CALENDAR) {
       const data = await CalendarProviderUtil.fetchJson<{ email?: string }>('https://www.googleapis.com/oauth2/v2/userinfo', accessToken);
@@ -101,13 +104,46 @@ class CalendarProviderUtil {
   }
 
   private static async fetchJson<T>(url: string, accessToken: string, init: RequestInit = {}): Promise<T> {
-    const headers = new Headers(init.headers);
-    headers.set('Authorization', `Bearer ${accessToken}`);
-    const response = await fetch(url, { ...init, headers });
-    const text = await response.text();
-    const data = text ? (CalendarProviderUtil.parseJson<T & { error?: { message?: string } }>(text) ?? ({} as T & { error?: { message?: string } })) : ({} as T & { error?: { message?: string } });
-    if (!response.ok) throw new HttpError(response.status >= 400 && response.status < 500 ? 400 : 502, `Calendar provider request failed (${response.status}): ${data.error?.message || text || response.statusText}`);
-    return data as T;
+    for (let attempt = 0; ; attempt += 1) {
+      const headers = new Headers(init.headers);
+      headers.set('Authorization', `Bearer ${accessToken}`);
+      const response = await fetch(url, { ...init, headers });
+      const text = await response.text();
+      const data = text ? (CalendarProviderUtil.parseJson<T & { error?: { message?: string } }>(text) ?? ({} as T & { error?: { message?: string } })) : ({} as T & { error?: { message?: string } });
+      if (response.ok) return data as T;
+
+      if (response.status === 429 && attempt < CalendarProviderUtil.maxThrottleRetryAttempts) {
+        const retryDelay = CalendarProviderUtil.retryDelayMilliseconds(response.headers.get('Retry-After'), attempt);
+        if (retryDelay <= CalendarProviderUtil.maxRetryAfterSeconds * 1000) {
+          await CalendarProviderUtil.delay(retryDelay);
+          continue;
+        }
+      }
+
+      throw CalendarProviderUtil.providerError(response, text, data);
+    }
+  }
+
+  private static providerError(response: Response, text: string, data: { error?: { message?: string } }): HttpError {
+    const message = `Calendar provider request failed (${response.status}): ${data.error?.message || text || response.statusText}`;
+    if (response.status === 404 || response.status === 410) return new HttpError(404, message);
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('Retry-After');
+      return new HttpError(503, message, retryAfter ? { 'Retry-After': retryAfter } : undefined);
+    }
+    return new HttpError(response.status >= 400 && response.status < 500 ? 400 : 502, message);
+  }
+
+  private static retryDelayMilliseconds(retryAfter: string | null, attempt: number): number {
+    if (!retryAfter) return 250 * 2 ** attempt;
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+    const retryAt = new Date(retryAfter).getTime();
+    return Number.isNaN(retryAt) ? Number.POSITIVE_INFINITY : Math.max(0, retryAt - Date.now());
+  }
+
+  private static delay(milliseconds: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
   private static async fetchGraphPages<T>(url: string, accessToken: string): Promise<T[]> {

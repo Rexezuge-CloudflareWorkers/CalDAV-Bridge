@@ -57,9 +57,12 @@ class CalDavUtil {
   private static readonly calendarServerProperties = new Set(['getctag']);
 
   public static xmlResponse(body: string, status = 207, headers: HeadersInit = {}): Response {
+    const responseHeaders = new Headers(headers);
+    responseHeaders.set('Content-Type', 'application/xml; charset=utf-8');
+    responseHeaders.set('DAV', '1, 3, calendar-access');
     return new Response(body, {
       status,
-      headers: { 'Content-Type': 'application/xml; charset=utf-8', DAV: '1, 3, calendar-access', ...headers },
+      headers: responseHeaders,
     });
   }
 
@@ -92,9 +95,10 @@ class CalDavUtil {
     });
   }
 
-  public static davError(status: number, message: string): Response {
-    const headers: HeadersInit = status === 401 ? { 'WWW-Authenticate': 'Basic realm="CalDAV Bridge", charset="UTF-8"' } : {};
-    if (status === 405) headers.Allow = CalDavUtil.allowHeader();
+  public static davError(status: number, message: string, responseHeaders: HeadersInit = {}): Response {
+    const headers = new Headers(responseHeaders);
+    if (status === 401) headers.set('WWW-Authenticate', 'Basic realm="CalDAV Bridge", charset="UTF-8"');
+    if (status === 405) headers.set('Allow', CalDavUtil.allowHeader());
     return CalDavUtil.xmlResponse(
       `<?xml version="1.0" encoding="utf-8"?><D:error xmlns:D="DAV:"><D:responsedescription>${CalDavUtil.escape(message)}</D:responsedescription></D:error>`,
       status,
@@ -480,6 +484,8 @@ class CalDavUtil {
         return 'Unsupported Media Type';
       case 501:
         return 'Not Implemented';
+      case 503:
+        return 'Service Unavailable';
       default:
         return 'Error';
     }

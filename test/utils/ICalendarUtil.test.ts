@@ -30,4 +30,23 @@ describe('ICalendarUtil', () => {
     expect(ics).toContain('RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;COUNT=5');
     expect(ICalendarUtil.fromICS(ics, 'fallback').recurrence).toEqual(['RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;COUNT=5']);
   });
+
+  it('quotes attendee CN parameters with iCalendar-safe escaping', () => {
+    const ics = ICalendarUtil.toICS({
+      uid: 'event-1@example.test',
+      start: { dateTime: '2026-05-04T10:00:00Z' },
+      end: { dateTime: '2026-05-04T10:30:00Z' },
+      attendees: [
+        { email: 'comma@example.test', name: 'Doe, Jane' },
+        { email: 'semicolon@example.test', name: 'Team; Group' },
+        { email: 'colon@example.test', name: 'Office: Hours' },
+        { email: 'quote@example.test', name: 'The "Quoted" Team' },
+      ],
+    });
+
+    expect(ics).toContain('ATTENDEE;CN="Doe, Jane":mailto:comma@example.test');
+    expect(ics).toContain('ATTENDEE;CN="Team; Group":mailto:semicolon@example.test');
+    expect(ics).toContain('ATTENDEE;CN="Office: Hours":mailto:colon@example.test');
+    expect(ics).toContain('ATTENDEE;CN="The ^\'Quoted^\' Team":mailto:quote@example.test');
+  });
 });

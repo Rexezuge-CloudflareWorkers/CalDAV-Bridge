@@ -39,10 +39,26 @@ interface ProviderCalendar {
   readOnly?: boolean;
 }
 
+type Route = { page: 'applications' } | { page: 'connect' } | { page: 'details'; applicationId: string };
+
 const providerLabels: Record<ProviderId, string> = {
   'google-calendar': 'Google Calendar',
   'microsoft-outlook-calendar': 'Outlook Calendar',
 };
+
+function parseRoute(): Route {
+  const path = window.location.pathname.replace(/\/$/, '');
+  const detailsMatch = path.match(/^\/user\/apps\/([^/]+)$/);
+  if (detailsMatch?.[1]) return { page: 'details', applicationId: decodeURIComponent(detailsMatch[1]) };
+  if (path === '/user/connect') return { page: 'connect' };
+  return { page: 'applications' };
+}
+
+function routePath(route: Route): string {
+  if (route.page === 'connect') return '/user/connect';
+  if (route.page === 'details') return `/user/apps/${encodeURIComponent(route.applicationId)}`;
+  return '/user/apps';
+}
 
 async function readJson<T>(response: Response): Promise<T> {
   const text = await response.text();
@@ -56,9 +72,9 @@ function formatTimestamp(timestamp?: number | null): string {
 }
 
 export default function SpaApp() {
+  const [route, setRoute] = useState<Route>(() => parseRoute());
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [applications, setApplications] = useState<ConnectedApplication[]>([]);
-  const [selectedApplicationId, setSelectedApplicationId] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [providerId, setProviderId] = useState<ProviderId>('google-calendar');
   const [clientId, setClientId] = useState('');
@@ -70,21 +86,53 @@ export default function SpaApp() {
   const [newPassword, setNewPassword] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const selectedApplication = applications.find((application) => application.applicationId === selectedApplicationId);
+  const selectedApplication =
+    route.page === 'details' ? applications.find((application) => application.applicationId === route.applicationId) : undefined;
+
+  useEffect(() => {
+    const handlePopState = () => setRoute(parseRoute());
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('oauth2') === 'connected') setNotice('OAuth2 connection completed.');
-    if (params.get('oauth2') === 'error') setError(params.get('message') || 'OAuth2 connection failed.');
+    const oauthResult = params.get('oauth2');
+    const connectedApplicationId = params.get('applicationId');
+    if (oauthResult === 'connected') {
+      setNotice('OAuth2 connection completed.');
+      if (connectedApplicationId) replaceRoute({ page: 'details', applicationId: connectedApplicationId });
+    }
+    if (oauthResult === 'error') {
+      setError(params.get('message') || 'OAuth2 connection failed.');
+      window.history.replaceState(null, '', routePath(parseRoute()));
+    }
     loadInitial().catch((loadError: unknown) => setError(loadError instanceof Error ? loadError.message : 'Unable to load CalDAV Bridge.'));
   }, []);
 
   useEffect(() => {
-    if (!selectedApplicationId) return;
-    Promise.all([loadCredentials(selectedApplicationId), loadCalendars(selectedApplicationId)]).catch((loadError: unknown) =>
+    setNewUsername('');
+    setNewPassword('');
+    if (route.page !== 'details') return;
+    if (!selectedApplication) {
+      setCredentials([]);
+      setCalendars([]);
+      return;
+    }
+    Promise.all([loadCredentials(selectedApplication.applicationId), loadCalendars(selectedApplication)]).catch((loadError: unknown) =>
       setError(loadError instanceof Error ? loadError.message : 'Unable to load application details.'),
     );
-  }, [selectedApplicationId]);
+  }, [route, selectedApplication]);
+
+  function navigate(route: Route) {
+    window.history.pushState(null, '', routePath(route));
+    setRoute(route);
+  }
+
+  function replaceRoute(route: Route) {
+    window.history.replaceState(null, '', routePath(route));
+    setRoute(route);
+  }
 
   async function loadInitial() {
     const me = await readJson<CurrentUser>(await fetch('/user/me'));
@@ -92,10 +140,10 @@ export default function SpaApp() {
     await loadApplications();
   }
 
-  async function loadApplications() {
+  async function loadApplications(): Promise<ConnectedApplication[]> {
     const data = await readJson<{ applications: ConnectedApplication[] }>(await fetch('/user/applications'));
     setApplications(data.applications);
-    setSelectedApplicationId((current) => current || data.applications[0]?.applicationId || '');
+    return data.applications;
   }
 
   async function loadCredentials(applicationId: string) {
@@ -105,14 +153,13 @@ export default function SpaApp() {
     setCredentials(data.credentials);
   }
 
-  async function loadCalendars(applicationId: string) {
-    const app = applications.find((application) => application.applicationId === applicationId);
-    if (!app || app.status !== 'connected') {
+  async function loadCalendars(application: ConnectedApplication) {
+    if (application.status !== 'connected') {
       setCalendars([]);
       return;
     }
     const data = await readJson<{ calendars: ProviderCalendar[] }>(
-      await fetch(`/user/application/calendars?applicationId=${encodeURIComponent(applicationId)}`),
+      await fetch(`/user/application/calendars?applicationId=${encodeURIComponent(application.applicationId)}`),
     );
     setCalendars(data.calendars);
   }
@@ -131,7 +178,7 @@ export default function SpaApp() {
     setClientId('');
     setClientSecret('');
     await loadApplications();
-    setSelectedApplicationId(data.application.applicationId);
+    navigate({ page: 'details', applicationId: data.application.applicationId });
   }
 
   async function startOAuth2(applicationId: string) {
@@ -146,31 +193,31 @@ export default function SpaApp() {
   }
 
   async function createCredential() {
-    if (!selectedApplicationId) return;
+    if (route.page !== 'details') return;
     const data = await readJson<{ password: string; metadata: CalDavCredential }>(
       await fetch('/user/application/caldav-credential', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId: selectedApplicationId, name: credentialName }),
+        body: JSON.stringify({ applicationId: route.applicationId, name: credentialName }),
       }),
     );
     setNewUsername(data.metadata.username);
     setNewPassword(data.password);
     setNotice('CalDAV credentials created. Save the password now; it will not be shown again.');
-    await loadCredentials(selectedApplicationId);
+    await loadCredentials(route.applicationId);
   }
 
   async function deleteCredential(credentialId: string) {
-    if (!selectedApplicationId) return;
+    if (route.page !== 'details') return;
     await readJson<{ success: boolean }>(
       await fetch('/user/application/caldav-credential', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId: selectedApplicationId, credentialId }),
+        body: JSON.stringify({ applicationId: route.applicationId, credentialId }),
       }),
     );
     setNotice('CalDAV password deleted.');
-    await loadCredentials(selectedApplicationId);
+    await loadCredentials(route.applicationId);
   }
 
   if (!user) return <div className="screen center">Loading CalDAV Bridge...</div>;
@@ -181,121 +228,233 @@ export default function SpaApp() {
         <div>
           <span>CalDAV</span> Bridge
         </div>
+        <nav aria-label="Primary navigation">
+          <button className={route.page === 'applications' ? 'nav-link active' : 'nav-link'} onClick={() => navigate({ page: 'applications' })}>
+            Applications
+          </button>
+          <button className={route.page === 'connect' ? 'nav-link active' : 'nav-link'} onClick={() => navigate({ page: 'connect' })}>
+            Connect Calendar
+          </button>
+        </nav>
         <small>{user.email}</small>
       </header>
       {(notice || error) && <div className={error ? 'notice error' : 'notice'}>{error || notice}</div>}
       <main>
-        <section className="panel create">
-          <h1>Connect Calendar</h1>
-          <label>
-            Name
-            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Work calendar" />
-          </label>
-          <label>
-            Provider
-            <select value={providerId} onChange={(event) => setProviderId(event.target.value as ProviderId)}>
-              <option value="google-calendar">Google Calendar</option>
-              <option value="microsoft-outlook-calendar">Outlook Calendar</option>
-            </select>
-          </label>
-          <label>
-            OAuth client ID
-            <input value={clientId} onChange={(event) => setClientId(event.target.value)} />
-          </label>
-          <label>
-            OAuth client secret
-            <input value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} type="password" />
-          </label>
-          <button onClick={() => saveApplication().catch((saveError) => setError(saveError.message))}>Create Application</button>
-        </section>
-        <section className="panel list">
-          <div className="section-title">
-            <h2>Applications</h2>
-            <span>
-              {applications.length}/{user.limits.maxApplicationsPerUser}
-            </span>
-          </div>
-          {applications.map((application) => (
-            <button
-              className={application.applicationId === selectedApplicationId ? 'card selected' : 'card'}
-              key={application.applicationId}
-              onClick={() => setSelectedApplicationId(application.applicationId)}
-            >
-              <strong>{application.displayName}</strong>
-              <small>
-                {providerLabels[application.providerId]} · {application.status}
-              </small>
-              <small>{application.providerEmail || 'OAuth not connected'}</small>
-            </button>
-          ))}
-        </section>
-        <section className="panel detail">
-          {selectedApplication ? (
-            <>
-              <h2>{selectedApplication.displayName}</h2>
-              <p className="muted">
-                Redirect URI: <code>{selectedApplication.oauth2RedirectUri}</code>
-              </p>
-              <p className="muted">
-                CalDAV URL: <code>{selectedApplication.caldavBaseUrl}</code>
-              </p>
-              <button onClick={() => startOAuth2(selectedApplication.applicationId).catch((oauthError) => setError(oauthError.message))}>
-                Connect OAuth2
-              </button>
-              <h3>CalDAV App Passwords</h3>
-              <div className="row">
-                <input value={credentialName} onChange={(event) => setCredentialName(event.target.value)} />
-                <button onClick={() => createCredential().catch((credentialError) => setError(credentialError.message))}>Generate</button>
+        {route.page === 'applications' && (
+          <section className="page-stack">
+            <div className="hero panel">
+              <div>
+                <p className="eyebrow">Calendar connections</p>
+                <h1>Applications</h1>
+                <p className="muted">Manage OAuth calendar applications and open each one for CalDAV credentials and calendars.</p>
               </div>
-              {newPassword && (
-                <div className="secret">
-                  <strong>New username:</strong>
-                  <code>{newUsername}</code>
-                  <strong>New password:</strong>
-                  <code>{newPassword}</code>
+              <button onClick={() => navigate({ page: 'connect' })}>Connect Calendar</button>
+            </div>
+            <section className="panel">
+              <div className="section-title">
+                <h2>Your Applications</h2>
+                <span>
+                  {applications.length}/{user.limits.maxApplicationsPerUser}
+                </span>
+              </div>
+              {applications.length ? (
+                <div className="application-grid">
+                  {applications.map((application) => (
+                    <button
+                      className="application-card"
+                      key={application.applicationId}
+                      onClick={() => navigate({ page: 'details', applicationId: application.applicationId })}
+                    >
+                      <span className={`status ${application.status}`}>{application.status}</span>
+                      <strong>{application.displayName}</strong>
+                      <small>{providerLabels[application.providerId]}</small>
+                      <small>{application.providerEmail || 'OAuth not connected'}</small>
+                      <span>{application.credentialCount || 0} app passwords</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <h3>No applications yet</h3>
+                  <p className="muted">Create an application to connect Google Calendar or Outlook Calendar.</p>
+                  <button onClick={() => navigate({ page: 'connect' })}>Connect Calendar</button>
                 </div>
               )}
-              <table>
-                <tbody>
-                  {credentials.map((credential) => (
-                    <tr key={credential.credentialId}>
-                      <td>{credential.name}</td>
-                      <td>
-                        <code>{credential.username}</code>
-                      </td>
-                      <td>
-                        <code>
-                          {credential.passwordPrefix}...{credential.passwordLastFour}
-                        </code>
-                      </td>
-                      <td>{formatTimestamp(credential.lastUsedAt)}</td>
-                      <td>
-                        <button
-                          onClick={() => deleteCredential(credential.credentialId).catch((deleteError) => setError(deleteError.message))}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <h3>Calendars</h3>
-              <div className="calendar-grid">
-                {calendars.map((calendar) => (
-                  <div className="calendar" key={calendar.id}>
-                    <strong>{calendar.name}</strong>
-                    <small>
-                      {calendar.timeZone || 'Provider timezone'} {calendar.readOnly ? '· read-only' : ''}
-                    </small>
-                  </div>
-                ))}
+            </section>
+          </section>
+        )}
+
+        {route.page === 'connect' && (
+          <section className="page-stack narrow">
+            <div className="page-heading">
+              <p className="eyebrow">New connection</p>
+              <h1>Connect Calendar</h1>
+              <p className="muted">Create one OAuth application at a time. You can connect OAuth2 and generate CalDAV app passwords after it is saved.</p>
+            </div>
+            <section className="panel form-panel">
+              <label>
+                Name
+                <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Work calendar" />
+              </label>
+              <label>
+                Provider
+                <select value={providerId} onChange={(event) => setProviderId(event.target.value as ProviderId)}>
+                  <option value="google-calendar">Google Calendar</option>
+                  <option value="microsoft-outlook-calendar">Outlook Calendar</option>
+                </select>
+              </label>
+              <label>
+                OAuth client ID
+                <input value={clientId} onChange={(event) => setClientId(event.target.value)} />
+              </label>
+              <label>
+                OAuth client secret
+                <input value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} type="password" />
+              </label>
+              <div className="form-actions">
+                <button onClick={() => saveApplication().catch((saveError) => setError(saveError.message))}>Create Application</button>
+                <button className="secondary" onClick={() => navigate({ page: 'applications' })}>
+                  Cancel
+                </button>
               </div>
-            </>
-          ) : (
-            <p>Select an application.</p>
-          )}
-        </section>
+            </section>
+          </section>
+        )}
+
+        {route.page === 'details' && (
+          <section className="page-stack">
+            {selectedApplication ? (
+              <>
+                <div className="hero panel">
+                  <div>
+                    <button className="text-link" onClick={() => navigate({ page: 'applications' })}>
+                      Back to applications
+                    </button>
+                    <p className="eyebrow">{providerLabels[selectedApplication.providerId]}</p>
+                    <h1>{selectedApplication.displayName}</h1>
+                    <p className="muted">{selectedApplication.providerEmail || 'OAuth is not connected yet.'}</p>
+                  </div>
+                  <button onClick={() => startOAuth2(selectedApplication.applicationId).catch((oauthError) => setError(oauthError.message))}>
+                    {selectedApplication.status === 'connected' ? 'Reconnect OAuth2' : 'Connect OAuth2'}
+                  </button>
+                </div>
+
+                <section className="panel detail-grid">
+                  <div>
+                    <h2>Connection Details</h2>
+                    <p className="muted">Use these values when configuring the OAuth provider and CalDAV client.</p>
+                  </div>
+                  <div className="detail-list">
+                    <div>
+                      <span>Status</span>
+                      <strong className={`status ${selectedApplication.status}`}>{selectedApplication.status}</strong>
+                    </div>
+                    <div>
+                      <span>Redirect URI</span>
+                      <code>{selectedApplication.oauth2RedirectUri}</code>
+                    </div>
+                    <div>
+                      <span>CalDAV URL</span>
+                      <code>{selectedApplication.caldavBaseUrl}</code>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="panel">
+                  <div className="section-title">
+                    <div>
+                      <h2>CalDAV App Passwords</h2>
+                      <p className="muted">Generate per-client credentials after OAuth2 is connected.</p>
+                    </div>
+                    <span>
+                      {credentials.length}/{user.limits.maxCalDavCredentialsPerApplication}
+                    </span>
+                  </div>
+                  <div className="row credential-row">
+                    <input value={credentialName} onChange={(event) => setCredentialName(event.target.value)} />
+                    <button onClick={() => createCredential().catch((credentialError) => setError(credentialError.message))}>Generate</button>
+                  </div>
+                  {newPassword && (
+                    <div className="secret">
+                      <strong>New username:</strong>
+                      <code>{newUsername}</code>
+                      <strong>New password:</strong>
+                      <code>{newPassword}</code>
+                    </div>
+                  )}
+                  {credentials.length ? (
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Password</th>
+                            <th>Last used</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {credentials.map((credential) => (
+                            <tr key={credential.credentialId}>
+                              <td>{credential.name}</td>
+                              <td>
+                                <code>{credential.username}</code>
+                              </td>
+                              <td>
+                                <code>
+                                  {credential.passwordPrefix}...{credential.passwordLastFour}
+                                </code>
+                              </td>
+                              <td>{formatTimestamp(credential.lastUsedAt)}</td>
+                              <td>
+                                <button
+                                  className="danger"
+                                  onClick={() => deleteCredential(credential.credentialId).catch((deleteError) => setError(deleteError.message))}
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="muted">No CalDAV app passwords have been generated for this application.</p>
+                  )}
+                </section>
+
+                <section className="panel">
+                  <div className="section-title">
+                    <h2>Calendars</h2>
+                    <span>{calendars.length}</span>
+                  </div>
+                  {calendars.length ? (
+                    <div className="calendar-grid">
+                      {calendars.map((calendar) => (
+                        <div className="calendar" key={calendar.id}>
+                          <strong>{calendar.name}</strong>
+                          <small>
+                            {calendar.timeZone || 'Provider timezone'} {calendar.readOnly ? '· read-only' : ''}
+                          </small>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted">Calendars will appear here after OAuth2 is connected.</p>
+                  )}
+                </section>
+              </>
+            ) : (
+              <section className="panel empty-state">
+                <h1>Application not found</h1>
+                <p className="muted">The selected application could not be found for your account.</p>
+                <button onClick={() => navigate({ page: 'applications' })}>Back to Applications</button>
+              </section>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );

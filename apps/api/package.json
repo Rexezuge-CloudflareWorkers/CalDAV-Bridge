@@ -9,7 +9,7 @@
   "dependencies": {
     "@caldav-bridge/shared": "workspace:*",
     "hono": "^4.12.21",
-    "jose": "^6.2.0",
+    "jose": "^6.2.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {

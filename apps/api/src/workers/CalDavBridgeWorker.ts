@@ -253,7 +253,6 @@ class CalDavBridgeWorker {
     if (report.type !== 'calendar-query' && report.type !== 'calendar-multiget') throw new HttpError(400, 'Unsupported CalDAV report.');
 
     const accessToken = await OAuth2AccessTokenService.getAccessToken(application.applicationId, env);
-    await this.requireCalendar(application, accessToken, path.calendarId);
 
     if (report.type === 'calendar-query') {
       const events = await CalendarProviderUtil.listEvents(application.providerId, accessToken, path.calendarId, report.timeRange);
@@ -277,7 +276,7 @@ class CalDavBridgeWorker {
         const event = await this.getDavObject(application, accessToken, mappingDAO, path.calendarId, objectHref);
         results.push({ href: objectHref, event });
       } catch (error) {
-        if (error instanceof HttpError && error.status >= 400 && error.status < 500) results.push({ href: objectHref, status: 404 });
+        if (error instanceof HttpError && error.status === 404) results.push({ href: objectHref, status: 404 });
         else throw error;
       }
     }
@@ -431,7 +430,7 @@ async function safeDav(action: () => Promise<Response>): Promise<Response> {
     const status = error instanceof HttpError ? error.status : 500;
     const message = error instanceof Error ? error.message : 'Internal server error.';
     if (status >= 500) console.error(error);
-    return CalDavUtil.davError(status, message);
+    return CalDavUtil.davError(status, message, error instanceof HttpError ? error.headers : undefined);
   }
 }
 

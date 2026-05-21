@@ -322,10 +322,10 @@ export default function SpaApp() {
         )}
 
         {route.page === 'details' && (
-          <section className="page-stack">
+          <section className="page-stack application-detail-page">
             {selectedApplication ? (
               <>
-                <div className="hero panel">
+                <div className="hero panel detail-hero">
                   <div>
                     <button className="text-link" onClick={() => navigate({ page: 'applications' })}>
                       Back to applications
@@ -360,91 +360,93 @@ export default function SpaApp() {
                   </div>
                 </section>
 
-                <section className="panel">
-                  <div className="section-title">
-                    <div>
-                      <h2>CalDAV App Passwords</h2>
-                      <p className="muted">Generate per-client credentials after OAuth2 is connected.</p>
+                <div className="detail-split">
+                  <section className="panel detail-panel credentials-panel">
+                    <div className="section-title">
+                      <div>
+                        <h2>CalDAV App Passwords</h2>
+                        <p className="muted">Generate per-client credentials after OAuth2 is connected.</p>
+                      </div>
+                      <span>
+                        {credentials.length}/{user.limits.maxCalDavCredentialsPerApplication}
+                      </span>
                     </div>
-                    <span>
-                      {credentials.length}/{user.limits.maxCalDavCredentialsPerApplication}
-                    </span>
-                  </div>
-                  <div className="row credential-row">
-                    <input value={credentialName} onChange={(event) => setCredentialName(event.target.value)} />
-                    <button onClick={() => createCredential().catch((credentialError) => setError(credentialError.message))}>Generate</button>
-                  </div>
-                  {newPassword && (
-                    <div className="secret">
-                      <strong>New username:</strong>
-                      <code>{newUsername}</code>
-                      <strong>New password:</strong>
-                      <code>{newPassword}</code>
+                    <div className="row credential-row">
+                      <input value={credentialName} onChange={(event) => setCredentialName(event.target.value)} />
+                      <button onClick={() => createCredential().catch((credentialError) => setError(credentialError.message))}>Generate</button>
                     </div>
-                  )}
-                  {credentials.length ? (
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Name</th>
-                            <th>Username</th>
-                            <th>Password</th>
-                            <th>Last used</th>
-                            <th>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {credentials.map((credential) => (
-                            <tr key={credential.credentialId}>
-                              <td>{credential.name}</td>
-                              <td>
-                                <code>{credential.username}</code>
-                              </td>
-                              <td>
-                                <code>
-                                  {credential.passwordPrefix}...{credential.passwordLastFour}
-                                </code>
-                              </td>
-                              <td>{formatTimestamp(credential.lastUsedAt)}</td>
-                              <td>
-                                <button
-                                  className="danger"
-                                  onClick={() => deleteCredential(credential.credentialId).catch((deleteError) => setError(deleteError.message))}
-                                >
-                                  Delete
-                                </button>
-                              </td>
+                    {newPassword && (
+                      <div className="secret">
+                        <strong>New username:</strong>
+                        <code>{newUsername}</code>
+                        <strong>New password:</strong>
+                        <code>{newPassword}</code>
+                      </div>
+                    )}
+                    {credentials.length ? (
+                      <div className="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>Username</th>
+                              <th>Password</th>
+                              <th>Last used</th>
+                              <th>Action</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="muted">No CalDAV app passwords have been generated for this application.</p>
-                  )}
-                </section>
+                          </thead>
+                          <tbody>
+                            {credentials.map((credential) => (
+                              <tr key={credential.credentialId}>
+                                <td>{credential.name}</td>
+                                <td>
+                                  <code>{credential.username}</code>
+                                </td>
+                                <td>
+                                  <code>
+                                    {credential.passwordPrefix}...{credential.passwordLastFour}
+                                  </code>
+                                </td>
+                                <td>{formatTimestamp(credential.lastUsedAt)}</td>
+                                <td>
+                                  <button
+                                    className="danger"
+                                    onClick={() => deleteCredential(credential.credentialId).catch((deleteError) => setError(deleteError.message))}
+                                  >
+                                    Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="muted">No CalDAV app passwords have been generated for this application.</p>
+                    )}
+                  </section>
 
-                <section className="panel">
-                  <div className="section-title">
-                    <h2>Calendars</h2>
-                    <span>{calendars.length}</span>
-                  </div>
-                  {calendars.length ? (
-                    <div className="calendar-grid">
-                      {calendars.map((calendar) => (
-                        <div className="calendar" key={calendar.id}>
-                          <strong>{calendar.name}</strong>
-                          <small>
-                            {calendar.timeZone || 'Provider timezone'} {calendar.readOnly ? '· read-only' : ''}
-                          </small>
-                        </div>
-                      ))}
+                  <section className="panel detail-panel calendars-panel">
+                    <div className="section-title">
+                      <h2>Calendars</h2>
+                      <span>{calendars.length}</span>
                     </div>
-                  ) : (
-                    <p className="muted">Calendars will appear here after OAuth2 is connected.</p>
-                  )}
-                </section>
+                    {calendars.length ? (
+                      <div className="calendar-grid">
+                        {calendars.map((calendar) => (
+                          <div className="calendar" key={calendar.id}>
+                            <strong>{calendar.name}</strong>
+                            <small>
+                              {calendar.timeZone || 'Provider timezone'} {calendar.readOnly ? '· read-only' : ''}
+                            </small>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="muted">Calendars will appear here after OAuth2 is connected.</p>
+                    )}
+                  </section>
+                </div>
               </>
             ) : (
               <section className="panel empty-state">

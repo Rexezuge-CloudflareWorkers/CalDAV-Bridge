@@ -64,6 +64,32 @@ th { color: #9fb0ca; font-size: .8rem; text-transform: uppercase; letter-spacing
 .calendar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .8rem; }
 .calendar { display: grid; gap: .35rem; min-width: 0; padding: .9rem; border-radius: 14px; background: #111a2f; border: 1px solid #26344f; }
 .empty-state { display: grid; justify-items: start; gap: .45rem; padding: 1.5rem; }
+.detail-split { display: grid; gap: 1rem; }
+@media (min-width: 761px) {
+  .application-detail-page { gap: .75rem; }
+  .application-detail-page .panel { padding: 1rem; border-radius: 18px; }
+  .application-detail-page .detail-hero { gap: 1rem; padding: .9rem 1rem; }
+  .application-detail-page .detail-hero h1 { font-size: clamp(1.8rem, 3vw, 2.6rem); line-height: 1; }
+  .application-detail-page .detail-hero .muted, .application-detail-page .section-title p { margin-bottom: 0; }
+  .application-detail-page .text-link { margin-bottom: .5rem; }
+  .application-detail-page .detail-grid { grid-template-columns: minmax(150px, .45fr) minmax(0, 1fr); gap: 1rem; }
+  .application-detail-page .detail-list { gap: .55rem; }
+  .application-detail-page .detail-list > div { gap: .18rem; padding-bottom: .55rem; }
+  .application-detail-page .section-title { align-items: flex-start; margin-bottom: .65rem; }
+  .application-detail-page .section-title h2 { font-size: 1.1rem; }
+  .application-detail-page .section-title .muted { line-height: 1.35; }
+  .application-detail-page .detail-split { grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr); gap: .75rem; align-items: start; }
+  .application-detail-page .detail-panel { min-height: 0; }
+  .application-detail-page .credential-row { gap: .5rem; }
+  .application-detail-page input { padding: .55rem .7rem; }
+  .application-detail-page button { padding: .6rem .8rem; }
+  .application-detail-page table { min-width: 640px; margin-top: .35rem; }
+  .application-detail-page th, .application-detail-page td { padding: .5rem .45rem; }
+  .application-detail-page .secret { max-height: 8rem; margin: .65rem 0; padding: .7rem; overflow: auto; }
+  .application-detail-page .table-wrap { max-height: 15rem; overflow: auto; }
+  .application-detail-page .calendar-grid { grid-template-columns: 1fr; max-height: 17rem; overflow: auto; padding-right: .15rem; }
+  .application-detail-page .calendar { padding: .7rem; }
+}
 @media (max-width: 760px) {
   header { grid-template-columns: 1fr; align-items: start; padding: 1rem; }
   header small { text-align: left; }

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import {
   CONNECTED_APPLICATION_STATUS_CONNECTED,
   DEFAULT_DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS,
@@ -260,8 +261,34 @@ class CalDavBridgeWorker {
 
   private async requireUserEmail(request: Request, env: Env): Promise<string> {
     const devEmail = (env as Env & { DEV_AUTH_EMAIL?: string }).DEV_AUTH_EMAIL;
-    const email = devEmail || request.headers.get('Cf-Access-Authenticated-User-Email');
-    if (!email) throw new HttpError(401, 'Cloudflare Access user email is required.');
+    if (devEmail) return devEmail;
+
+    const token = request.headers.get('cf-access-jwt-assertion');
+    if (!token) throw new HttpError(401, 'No Cloudflare Access JWT token provided in request headers.');
+
+    const envRecord = env as unknown as Record<string, unknown>;
+    const teamDomain = envRecord.TEAM_DOMAIN as string | undefined;
+    const policyAud = envRecord.POLICY_AUD as string | undefined;
+    if (!teamDomain || !policyAud) throw new HttpError(401, 'Missing required JWT verification configuration (TEAM_DOMAIN or POLICY_AUD not set).');
+
+    const normalizedTeamDomain = teamDomain.replace(/\/+$/, '');
+    const normalizedPolicyAud = policyAud.trim();
+    if (!normalizedPolicyAud) throw new HttpError(401, 'Missing required JWT verification configuration (empty POLICY_AUD).');
+    if (normalizedPolicyAud.includes(',')) throw new HttpError(401, 'Multiple JWT audiences are not supported. Configure a single POLICY_AUD value.');
+
+    let email: string | undefined;
+    try {
+      const jwks = createRemoteJWKSet(new URL(`${normalizedTeamDomain}/cdn-cgi/access/certs`));
+      const { payload } = await jwtVerify(token, jwks, {
+        issuer: normalizedTeamDomain,
+        audience: normalizedPolicyAud,
+      });
+      email = payload.email as string | undefined;
+    } catch (error) {
+      throw new HttpError(401, `JWT verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    if (!email) throw new HttpError(401, 'No email found in JWT token.');
     return email;
   }
 

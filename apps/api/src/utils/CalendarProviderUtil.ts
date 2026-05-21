@@ -216,8 +216,110 @@ class CalendarProviderUtil {
       end: { dateTime: event.end?.dateTime, timeZone: event.end?.timeZone },
       created: event.createdDateTime,
       updated: event.lastModifiedDateTime,
+      recurrence: CalendarProviderUtil.fromGraphRecurrence(event.recurrence),
       attendees: event.attendees?.map((attendee) => ({ email: attendee.emailAddress?.address || '', name: attendee.emailAddress?.name })).filter((attendee) => attendee.email),
     };
+  }
+
+  private static fromGraphRecurrence(recurrence?: GraphPatternedRecurrence | null | undefined): string[] | undefined {
+    const pattern = recurrence?.pattern;
+    const range = recurrence?.range;
+    if (!pattern?.type) return undefined;
+
+    const parts: string[] = [];
+    const frequency = CalendarProviderUtil.graphFrequency(pattern.type);
+    if (!frequency) return undefined;
+    parts.push(`FREQ=${frequency}`);
+
+    if (pattern.interval && pattern.interval > 0) parts.push(`INTERVAL=${pattern.interval}`);
+
+    const byDay = CalendarProviderUtil.graphByDay(pattern);
+    if (byDay) parts.push(`BYDAY=${byDay}`);
+    if ((pattern.type === 'absoluteMonthly' || pattern.type === 'absoluteYearly') && pattern.dayOfMonth)
+      parts.push(`BYMONTHDAY=${pattern.dayOfMonth}`);
+    if ((pattern.type === 'absoluteYearly' || pattern.type === 'relativeYearly') && pattern.month) parts.push(`BYMONTH=${pattern.month}`);
+
+    const weekStart = CalendarProviderUtil.graphDayToICal(pattern.firstDayOfWeek);
+    if (pattern.type === 'weekly' && weekStart) parts.push(`WKST=${weekStart}`);
+
+    if (range?.type === 'numbered' && range.numberOfOccurrences && range.numberOfOccurrences > 0)
+      parts.push(`COUNT=${range.numberOfOccurrences}`);
+    if (range?.type === 'endDate' && range.endDate) parts.push(`UNTIL=${CalendarProviderUtil.endDateToUtcStamp(range.endDate)}`);
+
+    return [`RRULE:${parts.join(';')}`];
+  }
+
+  private static graphFrequency(type: string): string | undefined {
+    switch (type) {
+      case 'daily':
+        return 'DAILY';
+      case 'weekly':
+        return 'WEEKLY';
+      case 'absoluteMonthly':
+      case 'relativeMonthly':
+        return 'MONTHLY';
+      case 'absoluteYearly':
+      case 'relativeYearly':
+        return 'YEARLY';
+      default:
+        return undefined;
+    }
+  }
+
+  private static graphByDay(pattern: GraphRecurrencePattern): string | undefined {
+    const days = (pattern.daysOfWeek || [])
+      .map((day) => CalendarProviderUtil.graphDayToICal(day))
+      .filter((day): day is string => Boolean(day));
+    if (!days.length) return undefined;
+    if (pattern.type === 'weekly') return days.join(',');
+    if (pattern.type !== 'relativeMonthly' && pattern.type !== 'relativeYearly') return undefined;
+    const ordinal = CalendarProviderUtil.graphWeekIndex(pattern.index || 'first');
+    return ordinal ? `${ordinal}${days[0]}` : days[0];
+  }
+
+  private static graphDayToICal(day?: string | undefined): string | undefined {
+    switch (day) {
+      case 'sunday':
+        return 'SU';
+      case 'monday':
+        return 'MO';
+      case 'tuesday':
+        return 'TU';
+      case 'wednesday':
+        return 'WE';
+      case 'thursday':
+        return 'TH';
+      case 'friday':
+        return 'FR';
+      case 'saturday':
+        return 'SA';
+      default:
+        return undefined;
+    }
+  }
+
+  private static graphWeekIndex(index?: string | undefined): string | undefined {
+    switch (index) {
+      case 'first':
+        return '1';
+      case 'second':
+        return '2';
+      case 'third':
+        return '3';
+      case 'fourth':
+        return '4';
+      case 'last':
+        return '-1';
+      default:
+        return undefined;
+    }
+  }
+
+  private static endDateToUtcStamp(value: string): string {
+    return new Date(`${value}T23:59:59Z`)
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\.\d{3}Z$/, 'Z');
   }
 
   private static toGraphEvent(event: CalendarEvent): Partial<GraphEvent> {
@@ -236,6 +338,9 @@ interface CalendarEventRange { start?: string | undefined; end?: string | undefi
 interface GoogleCalendar { id: string; summary?: string; description?: string; timeZone?: string; accessRole?: string; etag?: string }
 interface GoogleEvent { id?: string; iCalUID?: string; etag?: string; summary?: string; description?: string; location?: string; status?: string; start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string }; created?: string; updated?: string; recurrence?: string[]; attendees?: Array<{ email: string; displayName?: string }> }
 interface GraphCalendar { id: string; name?: string; canEdit?: boolean; changeKey?: string }
-interface GraphEvent { id?: string; iCalUId?: string; changeKey?: string; '@odata.etag'?: string; subject?: string; body?: { content?: string; contentType?: string }; location?: { displayName?: string }; isCancelled?: boolean; start?: { dateTime?: string; timeZone?: string }; end?: { dateTime?: string; timeZone?: string }; createdDateTime?: string; lastModifiedDateTime?: string; attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }> }
+interface GraphEvent { id?: string; iCalUId?: string; changeKey?: string; '@odata.etag'?: string; subject?: string; body?: { content?: string; contentType?: string }; location?: { displayName?: string }; isCancelled?: boolean; start?: { dateTime?: string; timeZone?: string }; end?: { dateTime?: string; timeZone?: string }; createdDateTime?: string; lastModifiedDateTime?: string; recurrence?: GraphPatternedRecurrence | null; attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }> }
+interface GraphPatternedRecurrence { pattern?: GraphRecurrencePattern | undefined; range?: GraphRecurrenceRange | undefined }
+interface GraphRecurrencePattern { type?: string | undefined; interval?: number | undefined; daysOfWeek?: string[] | undefined; firstDayOfWeek?: string | undefined; index?: string | undefined; dayOfMonth?: number | undefined; month?: number | undefined }
+interface GraphRecurrenceRange { type?: string | undefined; startDate?: string | undefined; endDate?: string | undefined; numberOfOccurrences?: number | undefined; recurrenceTimeZone?: string | undefined }
 
 export { CalendarProviderUtil };

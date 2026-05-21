@@ -88,7 +88,7 @@ class ICalendarUtil {
   }
 
   private static escapeParam(value: string): string {
-    return value.replace(/"/g, '');
+    return `"${value.replace(/\^/g, '^^').replace(/\r\n|\r|\n/g, '^n').replace(/"/g, "^'")}"`;
   }
 
   private static foldLines(lines: string[]): string[] {

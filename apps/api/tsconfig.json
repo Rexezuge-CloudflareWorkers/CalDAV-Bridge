@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "lib": ["ES2021", "DOM"],
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@caldav-bridge/shared": ["../../packages/shared/src"],
+      "@caldav-bridge/shared/*": ["../../packages/shared/src/*"]
+    }
+  },
+  "include": ["../../worker-configuration.d.ts", "src/**/*.ts"],
+  "exclude": ["test", "node_modules"]
+}

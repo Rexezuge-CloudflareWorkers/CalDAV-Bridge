@@ -1,0 +1,16 @@
+{
+  "name": "@caldav-bridge/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "25.7.x",
+    "typescript": "^6.0.3"
+  }
+}

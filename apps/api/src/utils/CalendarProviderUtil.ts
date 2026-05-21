@@ -1,0 +1,150 @@
+import { PROVIDER_GOOGLE_CALENDAR } from '@caldav-bridge/shared/constants';
+import type { ProviderId } from '@caldav-bridge/shared/constants';
+import type { CalendarEvent, ProviderCalendar } from '@caldav-bridge/shared/model';
+import { HttpError } from './HttpError';
+
+class CalendarProviderUtil {
+  public static async getProfile(providerId: ProviderId | string, accessToken: string): Promise<{ emailAddress: string }> {
+    if (providerId === PROVIDER_GOOGLE_CALENDAR) {
+      const data = await CalendarProviderUtil.fetchJson<{ email?: string }>('https://www.googleapis.com/oauth2/v2/userinfo', accessToken);
+      if (!data.email) throw new HttpError(502, 'Google profile did not include an email address.');
+      return { emailAddress: data.email };
+    }
+    const data = await CalendarProviderUtil.fetchJson<{ mail?: string | null; userPrincipalName?: string | null }>(
+      'https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName',
+      accessToken,
+    );
+    const emailAddress = data.mail || data.userPrincipalName || undefined;
+    if (!emailAddress) throw new HttpError(502, 'Microsoft Graph profile did not include an email address.');
+    return { emailAddress };
+  }
+
+  public static async listCalendars(providerId: ProviderId | string, accessToken: string): Promise<ProviderCalendar[]> {
+    if (providerId === PROVIDER_GOOGLE_CALENDAR) {
+      const data = await CalendarProviderUtil.fetchJson<{ items?: GoogleCalendar[] }>('https://www.googleapis.com/calendar/v3/users/me/calendarList', accessToken);
+      return (data.items || []).map((item) => ({ id: item.id, name: item.summary || item.id, description: item.description, timeZone: item.timeZone, readOnly: item.accessRole === 'reader', etag: item.etag }));
+    }
+    const data = await CalendarProviderUtil.fetchJson<{ value?: GraphCalendar[] }>('https://graph.microsoft.com/v1.0/me/calendars', accessToken);
+    return (data.value || []).map((item) => ({ id: item.id, name: item.name || item.id, readOnly: !item.canEdit, etag: item.changeKey }));
+  }
+
+  public static async listEvents(providerId: ProviderId | string, accessToken: string, calendarId: string): Promise<CalendarEvent[]> {
+    if (providerId === PROVIDER_GOOGLE_CALENDAR) {
+      const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
+      url.searchParams.set('singleEvents', 'false');
+      url.searchParams.set('maxResults', '2500');
+      const data = await CalendarProviderUtil.fetchJson<{ items?: GoogleEvent[] }>(url.toString(), accessToken);
+      return (data.items || []).map(CalendarProviderUtil.fromGoogleEvent);
+    }
+    const data = await CalendarProviderUtil.fetchJson<{ value?: GraphEvent[] }>(
+      `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`,
+      accessToken,
+    );
+    return (data.value || []).map(CalendarProviderUtil.fromGraphEvent);
+  }
+
+  public static async getEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, eventId: string): Promise<CalendarEvent> {
+    if (providerId === PROVIDER_GOOGLE_CALENDAR) {
+      return CalendarProviderUtil.fromGoogleEvent(await CalendarProviderUtil.fetchJson<GoogleEvent>(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, accessToken));
+    }
+    return CalendarProviderUtil.fromGraphEvent(await CalendarProviderUtil.fetchJson<GraphEvent>(`https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, accessToken));
+  }
+
+  public static async upsertEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, event: CalendarEvent, providerEventId?: string): Promise<CalendarEvent> {
+    if (providerId === PROVIDER_GOOGLE_CALENDAR) {
+      const url = providerEventId
+        ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(providerEventId)}`
+        : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+      const data = await CalendarProviderUtil.fetchJson<GoogleEvent>(url, accessToken, {
+        method: providerEventId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(CalendarProviderUtil.toGoogleEvent(event)),
+      });
+      return CalendarProviderUtil.fromGoogleEvent(data);
+    }
+    const url = providerEventId
+      ? `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(providerEventId)}`
+      : `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events`;
+    const data = await CalendarProviderUtil.fetchJson<GraphEvent>(url, accessToken, {
+      method: providerEventId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(CalendarProviderUtil.toGraphEvent(event)),
+    });
+    return CalendarProviderUtil.fromGraphEvent(data);
+  }
+
+  public static async deleteEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, eventId: string): Promise<void> {
+    const url = providerId === PROVIDER_GOOGLE_CALENDAR
+      ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
+      : `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
+    const response = await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!response.ok && response.status !== 404 && response.status !== 410) throw new HttpError(502, `Calendar provider delete failed (${response.status}): ${await response.text()}`);
+  }
+
+  private static async fetchJson<T>(url: string, accessToken: string, init: RequestInit = {}): Promise<T> {
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${accessToken}`);
+    const response = await fetch(url, { ...init, headers });
+    const text = await response.text();
+    const data = text ? (JSON.parse(text) as T & { error?: { message?: string } }) : ({} as T & { error?: { message?: string } });
+    if (!response.ok) throw new HttpError(response.status >= 400 && response.status < 500 ? 400 : 502, `Calendar provider request failed (${response.status}): ${data.error?.message || text || response.statusText}`);
+    return data as T;
+  }
+
+  private static fromGoogleEvent(event: GoogleEvent): CalendarEvent {
+    return {
+      id: event.id,
+      uid: event.iCalUID || `${event.id}@google-calendar`,
+      etag: event.etag,
+      summary: event.summary,
+      description: event.description,
+      location: event.location,
+      status: event.status,
+      start: event.start || {},
+      end: event.end || {},
+      created: event.created,
+      updated: event.updated,
+      recurrence: event.recurrence,
+      attendees: event.attendees?.map((attendee) => ({ email: attendee.email, name: attendee.displayName })).filter((attendee) => attendee.email),
+    };
+  }
+
+  private static toGoogleEvent(event: CalendarEvent): Partial<GoogleEvent> {
+    return { summary: event.summary, description: event.description, location: event.location, status: event.status, start: event.start, end: event.end, recurrence: event.recurrence };
+  }
+
+  private static fromGraphEvent(event: GraphEvent): CalendarEvent {
+    return {
+      id: event.id,
+      uid: event.iCalUId || `${event.id}@microsoft-outlook-calendar`,
+      etag: event.changeKey || event['@odata.etag'],
+      summary: event.subject,
+      description: event.body?.content,
+      location: event.location?.displayName,
+      status: event.isCancelled ? 'cancelled' : 'confirmed',
+      start: { dateTime: event.start?.dateTime, timeZone: event.start?.timeZone },
+      end: { dateTime: event.end?.dateTime, timeZone: event.end?.timeZone },
+      created: event.createdDateTime,
+      updated: event.lastModifiedDateTime,
+      attendees: event.attendees?.map((attendee) => ({ email: attendee.emailAddress?.address || '', name: attendee.emailAddress?.name })).filter((attendee) => attendee.email),
+    };
+  }
+
+  private static toGraphEvent(event: CalendarEvent): Partial<GraphEvent> {
+    return {
+      subject: event.summary,
+      body: { contentType: 'text', content: event.description || '' },
+      location: event.location ? { displayName: event.location } : undefined,
+      start: { dateTime: event.start.dateTime || `${event.start.date || ''}T00:00:00`, timeZone: event.start.timeZone || 'UTC' },
+      end: { dateTime: event.end.dateTime || `${event.end.date || ''}T00:00:00`, timeZone: event.end.timeZone || 'UTC' },
+      attendees: event.attendees?.map((attendee) => ({ emailAddress: { address: attendee.email, name: attendee.name }, type: 'required' })),
+    };
+  }
+}
+
+interface GoogleCalendar { id: string; summary?: string; description?: string; timeZone?: string; accessRole?: string; etag?: string }
+interface GoogleEvent { id?: string; iCalUID?: string; etag?: string; summary?: string; description?: string; location?: string; status?: string; start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string }; created?: string; updated?: string; recurrence?: string[]; attendees?: Array<{ email: string; displayName?: string }> }
+interface GraphCalendar { id: string; name?: string; canEdit?: boolean; changeKey?: string }
+interface GraphEvent { id?: string; iCalUId?: string; changeKey?: string; '@odata.etag'?: string; subject?: string; body?: { content?: string; contentType?: string }; location?: { displayName?: string }; isCancelled?: boolean; start?: { dateTime?: string; timeZone?: string }; end?: { dateTime?: string; timeZone?: string }; createdDateTime?: string; lastModifiedDateTime?: string; attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }> }
+
+export { CalendarProviderUtil };

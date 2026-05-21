@@ -23,7 +23,7 @@
     "globals": "^17.5.x",
     "jsonc-parser": "^3.3.1",
     "prettier": "^3.8.x",
-    "tailwindcss": "^4.2.x",
+    "tailwindcss": "^4.3.x",
     "terser": "^5.47.x",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",

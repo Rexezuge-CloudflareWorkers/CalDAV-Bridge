@@ -9,7 +9,7 @@ import {
   DEFAULT_OAUTH2_STATE_EXPIRY_MINUTES,
 } from '@caldav-bridge/shared/constants';
 import { CalDavCredentialUtil, TimestampUtil } from '@caldav-bridge/shared/utils';
-import type { ConnectedApplication, ConnectedApplicationMetadata } from '@caldav-bridge/shared/model';
+import type { CalendarEvent, ConnectedApplication, ConnectedApplicationMetadata, ProviderCalendar } from '@caldav-bridge/shared/model';
 import { validateRequestInput } from '@caldav-bridge/shared/schema';
 import { CalDavCredentialDAO, CalendarObjectMappingDAO, ConnectedApplicationDAO, OAuth2AuthorizationSessionDAO, UserDAO } from '@/dao';
 import {
@@ -48,7 +48,8 @@ class CalDavBridgeWorker {
     app.delete('/user/application/caldav-credential', async (c) => safe(() => this.deleteCalDavCredential(c.req.raw, c.env)));
     app.get('/api/oauth2/callback/:applicationId', async (c) => safe(() => this.oauth2Callback(c.req.raw, c.env, c.req.param('applicationId'))));
 
-    app.all('/dav/*', async (c) => safe(() => this.handleDav(c.req.raw, c.env)));
+    app.all('/dav', async (c) => safeDav(() => this.handleDav(c.req.raw, c.env)));
+    app.all('/dav/*', async (c) => safeDav(() => this.handleDav(c.req.raw, c.env)));
     app.get('/user/*', (c) => (ConfigurationUtil.getServeSpaFromWorker(c.env) ? c.html(SPA_HTML) : c.notFound()));
     this.app = app;
   }
@@ -183,36 +184,37 @@ class CalDavBridgeWorker {
     if (request.method === 'OPTIONS') return CalDavUtil.options();
     const url = new URL(request.url);
     const path = CalDavUtil.parsePath(url.pathname);
-    if (!path.applicationId) return CalDavUtil.principal(BaseUrlUtil.getBaseUrl(request), 'caldav-bridge');
+    if (path.resource === 'unknown') return CalDavUtil.notFound(url.pathname);
     const application = await this.authenticateDav(request, env, path.applicationId);
-    const accessToken = await OAuth2AccessTokenService.getAccessToken(application.applicationId, env);
     const mappingDAO = new CalendarObjectMappingDAO(env.DB);
 
-    if (!path.calendarId) {
-      const calendars = await CalendarProviderUtil.listCalendars(application.providerId, accessToken);
-      return CalDavUtil.calendarHome(application.applicationId, calendars);
+    if (request.method === 'PROPFIND') return this.handleDavPropfind(request, env, application, path);
+    if (request.method === 'REPORT') return this.handleDavReport(request, env, application, path, mappingDAO);
+
+    if (path.resource !== 'object' || !path.calendarId || !path.objectHref) throw new HttpError(405, 'Unsupported CalDAV method for this resource.');
+
+    const accessToken = await OAuth2AccessTokenService.getAccessToken(application.applicationId, env);
+    if (request.method === 'GET' || request.method === 'HEAD') {
+      const event = await this.getDavObject(application, accessToken, mappingDAO, path.calendarId, path.objectHref);
+      if (request.method === 'HEAD') return CalDavUtil.headCalendarResponse(event);
+      return CalDavUtil.textCalendarResponse(ICalendarUtil.toICS(event), event.etag || event.uid);
     }
 
-    if (!path.objectHref) {
-      const events = await CalendarProviderUtil.listEvents(application.providerId, accessToken, path.calendarId);
-      await Promise.all(events.map((event) => mappingDAO.upsert(application.applicationId, path.calendarId || '', ICalendarUtil.eventHref(event), event.id || event.uid, event.uid, event.etag)));
-      return CalDavUtil.calendarObjects(application.applicationId, path.calendarId, events);
-    }
-
-    const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
-    const providerEventId = mapping?.providerEventId || path.objectHref.replace(/\.ics$/i, '');
-    if (request.method === 'GET' || request.method === 'REPORT' || request.method === 'PROPFIND') {
-      const event = await CalendarProviderUtil.getEvent(application.providerId, accessToken, path.calendarId, providerEventId);
-      if (request.method !== 'GET') return CalDavUtil.calendarObjects(application.applicationId, path.calendarId, [event]);
-      return new Response(ICalendarUtil.toICS(event), { headers: { 'Content-Type': 'text/calendar; charset=utf-8', ETag: event.etag || event.uid } });
-    }
     if (request.method === 'PUT') {
+      await this.requireWritableCalendar(application, accessToken, path.calendarId);
+      const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
+      if (request.headers.get('If-None-Match')?.trim() === '*' && mapping) throw new HttpError(412, 'Calendar object already exists.');
+      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), mapping?.etag || undefined)) throw new HttpError(412, 'Calendar object ETag does not match.');
       const event = ICalendarUtil.fromICS(await request.text(), mapping?.uid || crypto.randomUUID());
       const saved = await CalendarProviderUtil.upsertEvent(application.providerId, accessToken, path.calendarId, event, mapping?.providerEventId);
       await mappingDAO.upsert(application.applicationId, path.calendarId, path.objectHref, saved.id || event.uid, saved.uid, saved.etag);
-      return new Response(null, { status: mapping ? 204 : 201, headers: { ETag: saved.etag || saved.uid } });
+      return new Response(null, { status: mapping ? 204 : 201, headers: { ETag: CalDavUtil.eventEtag(saved), Location: url.pathname } });
     }
     if (request.method === 'DELETE') {
+      await this.requireWritableCalendar(application, accessToken, path.calendarId);
+      const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
+      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), mapping?.etag || undefined)) throw new HttpError(412, 'Calendar object ETag does not match.');
+      const providerEventId = mapping?.providerEventId || CalDavUtil.providerEventIdFromObjectHref(path.objectHref);
       await CalendarProviderUtil.deleteEvent(application.providerId, accessToken, path.calendarId, providerEventId);
       await mappingDAO.deleteByHref(application.applicationId, path.calendarId, path.objectHref);
       return new Response(null, { status: 204 });
@@ -220,16 +222,108 @@ class CalDavBridgeWorker {
     throw new HttpError(405, 'Unsupported CalDAV method.');
   }
 
-  private async authenticateDav(request: Request, env: Env, applicationId: string): Promise<ConnectedApplication> {
+  private async handleDavPropfind(request: Request, env: Env, application: ConnectedApplication, path: ReturnType<typeof CalDavUtil.parsePath>): Promise<Response> {
+    const propfind = CalDavUtil.parsePropfind(await request.text());
+    const depth = CalDavUtil.parseDepth(request.headers.get('Depth'));
+    if (path.resource === 'root') return CalDavUtil.propfindRoot(application.applicationId, propfind);
+    if (path.resource === 'principal') return CalDavUtil.propfindPrincipal(application.applicationId, propfind);
+
+    const accessToken = await OAuth2AccessTokenService.getAccessToken(application.applicationId, env);
+    if (path.resource === 'calendarHome') {
+      const calendars = depth > 0 ? await CalendarProviderUtil.listCalendars(application.providerId, accessToken) : [];
+      return CalDavUtil.propfindCalendarHome(application.applicationId, calendars, propfind, depth);
+    }
+    if (path.resource === 'calendar' && path.calendarId) {
+      const calendar = await this.requireCalendar(application, accessToken, path.calendarId);
+      const events = depth > 0 ? await CalendarProviderUtil.listEvents(application.providerId, accessToken, path.calendarId) : [];
+      if (events.length) await this.upsertMappings(new CalendarObjectMappingDAO(env.DB), application.applicationId, path.calendarId, events);
+      return CalDavUtil.propfindCalendar(application.applicationId, calendar, propfind, depth, events);
+    }
+    if (path.resource === 'object' && path.calendarId && path.objectHref) {
+      const event = await this.getDavObject(application, accessToken, new CalendarObjectMappingDAO(env.DB), path.calendarId, path.objectHref);
+      return CalDavUtil.propfindObject(application.applicationId, path.calendarId, path.objectHref, event, propfind);
+    }
+    return CalDavUtil.notFound(new URL(request.url).pathname);
+  }
+
+  private async handleDavReport(request: Request, env: Env, application: ConnectedApplication, path: ReturnType<typeof CalDavUtil.parsePath>, mappingDAO: CalendarObjectMappingDAO): Promise<Response> {
+    if (path.resource !== 'calendar' || !path.calendarId) throw new HttpError(405, 'CalDAV reports are only supported on calendar collections.');
+    const report = CalDavUtil.parseReport(await request.text());
+    if (report.type === 'sync-collection') throw new HttpError(501, 'CalDAV sync-collection is not advertised or supported yet.');
+    if (report.type !== 'calendar-query' && report.type !== 'calendar-multiget') throw new HttpError(400, 'Unsupported CalDAV report.');
+
+    const accessToken = await OAuth2AccessTokenService.getAccessToken(application.applicationId, env);
+    await this.requireCalendar(application, accessToken, path.calendarId);
+
+    if (report.type === 'calendar-query') {
+      const events = await CalendarProviderUtil.listEvents(application.providerId, accessToken, path.calendarId, report.timeRange);
+      await this.upsertMappings(mappingDAO, application.applicationId, path.calendarId, events);
+      return CalDavUtil.calendarObjectReport(
+        application.applicationId,
+        path.calendarId,
+        events.map((event) => ({ href: ICalendarUtil.eventHref(event), event })),
+        report.properties,
+      );
+    }
+
+    const results: Array<{ href: string; event?: CalendarEvent | undefined; status?: number | undefined }> = [];
+    for (const href of report.hrefs) {
+      const objectHref = CalDavUtil.objectHrefFromDavHref(href, application.applicationId, path.calendarId);
+      if (!objectHref) {
+        results.push({ href, status: 404 });
+        continue;
+      }
+      try {
+        const event = await this.getDavObject(application, accessToken, mappingDAO, path.calendarId, objectHref);
+        results.push({ href: objectHref, event });
+      } catch (error) {
+        if (error instanceof HttpError && error.status >= 400 && error.status < 500) results.push({ href: objectHref, status: 404 });
+        else throw error;
+      }
+    }
+    return CalDavUtil.calendarObjectReport(application.applicationId, path.calendarId, results, report.properties);
+  }
+
+  private async getDavObject(application: ConnectedApplication, accessToken: string, mappingDAO: CalendarObjectMappingDAO, calendarId: string, objectHref: string): Promise<CalendarEvent> {
+    const mapping = await mappingDAO.getByHref(application.applicationId, calendarId, objectHref);
+    const providerEventId = mapping?.providerEventId || CalDavUtil.providerEventIdFromObjectHref(objectHref);
+    const event = await CalendarProviderUtil.getEvent(application.providerId, accessToken, calendarId, providerEventId);
+    await mappingDAO.upsert(application.applicationId, calendarId, objectHref, event.id || providerEventId, event.uid, event.etag);
+    return event;
+  }
+
+  private async requireCalendar(application: ConnectedApplication, accessToken: string, calendarId: string): Promise<ProviderCalendar> {
+    const calendar = (await CalendarProviderUtil.listCalendars(application.providerId, accessToken)).find((item) => item.id === calendarId);
+    if (!calendar) throw new HttpError(404, 'Calendar collection was not found.');
+    return calendar;
+  }
+
+  private async requireWritableCalendar(application: ConnectedApplication, accessToken: string, calendarId: string): Promise<void> {
+    const calendar = await this.requireCalendar(application, accessToken, calendarId);
+    if (calendar.readOnly) throw new HttpError(403, 'Calendar collection is read-only.');
+  }
+
+  private async upsertMappings(mappingDAO: CalendarObjectMappingDAO, applicationId: string, calendarId: string, events: CalendarEvent[]): Promise<void> {
+    await Promise.all(events.map((event) => mappingDAO.upsert(applicationId, calendarId, ICalendarUtil.eventHref(event), event.id || event.uid, event.uid, event.etag)));
+  }
+
+  private async authenticateDav(request: Request, env: Env, applicationId?: string | undefined): Promise<ConnectedApplication> {
     const authorization = request.headers.get('Authorization') || '';
     if (!authorization.startsWith('Basic ')) return unauthorizedDav();
-    const decoded = atob(authorization.slice('Basic '.length));
-    const password = decoded.slice(decoded.indexOf(':') + 1);
+    let decoded = '';
+    try {
+      decoded = atob(authorization.slice('Basic '.length));
+    } catch {
+      return unauthorizedDav();
+    }
+    const separatorIndex = decoded.indexOf(':');
+    const password = separatorIndex >= 0 ? decoded.slice(separatorIndex + 1) : '';
+    if (!password) return unauthorizedDav();
     const credentialDAO = new CalDavCredentialDAO(env.DB);
     const credential = await credentialDAO.getByHash(await CalDavCredentialUtil.hashPassword(password), true);
-    if (!credential || credential.applicationId !== applicationId) return unauthorizedDav();
+    if (!credential || (applicationId && credential.applicationId !== applicationId)) return unauthorizedDav();
     await credentialDAO.updateLastUsed(credential.credentialId);
-    const application = await (await this.applicationDAO(env)).getById(applicationId);
+    const application = await (await this.applicationDAO(env)).getById(credential.applicationId);
     if (!application) return unauthorizedDav();
     return application;
   }
@@ -327,6 +421,17 @@ async function safe(action: () => Promise<Response>): Promise<Response> {
     return await action();
   } catch (error) {
     return errorResponse(error);
+  }
+}
+
+async function safeDav(action: () => Promise<Response>): Promise<Response> {
+  try {
+    return await action();
+  } catch (error) {
+    const status = error instanceof HttpError ? error.status : 500;
+    const message = error instanceof Error ? error.message : 'Internal server error.';
+    if (status >= 500) console.error(error);
+    return CalDavUtil.davError(status, message);
   }
 }
 

@@ -21,26 +21,45 @@ class CalendarProviderUtil {
 
   public static async listCalendars(providerId: ProviderId | string, accessToken: string): Promise<ProviderCalendar[]> {
     if (providerId === PROVIDER_GOOGLE_CALENDAR) {
-      const data = await CalendarProviderUtil.fetchJson<{ items?: GoogleCalendar[] }>('https://www.googleapis.com/calendar/v3/users/me/calendarList', accessToken);
-      return (data.items || []).map((item) => ({ id: item.id, name: item.summary || item.id, description: item.description, timeZone: item.timeZone, readOnly: item.accessRole === 'reader', etag: item.etag }));
+      const calendars: GoogleCalendar[] = [];
+      let pageToken: string | undefined;
+      do {
+        const url = new URL('https://www.googleapis.com/calendar/v3/users/me/calendarList');
+        url.searchParams.set('maxResults', '250');
+        if (pageToken) url.searchParams.set('pageToken', pageToken);
+        const data = await CalendarProviderUtil.fetchJson<{ items?: GoogleCalendar[]; nextPageToken?: string }>(url.toString(), accessToken);
+        calendars.push(...(data.items || []));
+        pageToken = data.nextPageToken;
+      } while (pageToken);
+      return calendars.map((item) => ({ id: item.id, name: item.summary || item.id, description: item.description, timeZone: item.timeZone, readOnly: item.accessRole === 'reader', etag: item.etag }));
     }
-    const data = await CalendarProviderUtil.fetchJson<{ value?: GraphCalendar[] }>('https://graph.microsoft.com/v1.0/me/calendars', accessToken);
-    return (data.value || []).map((item) => ({ id: item.id, name: item.name || item.id, readOnly: !item.canEdit, etag: item.changeKey }));
+    const calendars = await CalendarProviderUtil.fetchGraphPages<GraphCalendar>('https://graph.microsoft.com/v1.0/me/calendars?$top=100', accessToken);
+    return calendars.map((item) => ({ id: item.id, name: item.name || item.id, readOnly: !item.canEdit, etag: item.changeKey }));
   }
 
-  public static async listEvents(providerId: ProviderId | string, accessToken: string, calendarId: string): Promise<CalendarEvent[]> {
+  public static async listEvents(providerId: ProviderId | string, accessToken: string, calendarId: string, range: CalendarEventRange = {}): Promise<CalendarEvent[]> {
     if (providerId === PROVIDER_GOOGLE_CALENDAR) {
-      const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
-      url.searchParams.set('singleEvents', 'false');
-      url.searchParams.set('maxResults', '2500');
-      const data = await CalendarProviderUtil.fetchJson<{ items?: GoogleEvent[] }>(url.toString(), accessToken);
-      return (data.items || []).map(CalendarProviderUtil.fromGoogleEvent);
+      const events: GoogleEvent[] = [];
+      let pageToken: string | undefined;
+      do {
+        const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
+        url.searchParams.set('singleEvents', 'false');
+        url.searchParams.set('maxResults', '2500');
+        if (range.start) url.searchParams.set('timeMin', range.start);
+        if (range.end) url.searchParams.set('timeMax', range.end);
+        if (pageToken) url.searchParams.set('pageToken', pageToken);
+        const data = await CalendarProviderUtil.fetchJson<{ items?: GoogleEvent[]; nextPageToken?: string }>(url.toString(), accessToken);
+        events.push(...(data.items || []));
+        pageToken = data.nextPageToken;
+      } while (pageToken);
+      return events.map(CalendarProviderUtil.fromGoogleEvent).filter((event) => CalendarProviderUtil.eventOverlapsRange(event, range));
     }
-    const data = await CalendarProviderUtil.fetchJson<{ value?: GraphEvent[] }>(
-      `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`,
-      accessToken,
-    );
-    return (data.value || []).map(CalendarProviderUtil.fromGraphEvent);
+    const useCalendarView = Boolean(range.start && range.end);
+    const url = useCalendarView
+      ? `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/calendarView?startDateTime=${encodeURIComponent(range.start || '')}&endDateTime=${encodeURIComponent(range.end || '')}&$top=250`
+      : `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`;
+    const events = await CalendarProviderUtil.fetchGraphPages<GraphEvent>(url, accessToken);
+    return events.map(CalendarProviderUtil.fromGraphEvent).filter((event) => CalendarProviderUtil.eventOverlapsRange(event, range));
   }
 
   public static async getEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, eventId: string): Promise<CalendarEvent> {
@@ -86,9 +105,44 @@ class CalendarProviderUtil {
     headers.set('Authorization', `Bearer ${accessToken}`);
     const response = await fetch(url, { ...init, headers });
     const text = await response.text();
-    const data = text ? (JSON.parse(text) as T & { error?: { message?: string } }) : ({} as T & { error?: { message?: string } });
+    const data = text ? (CalendarProviderUtil.parseJson<T & { error?: { message?: string } }>(text) ?? ({} as T & { error?: { message?: string } })) : ({} as T & { error?: { message?: string } });
     if (!response.ok) throw new HttpError(response.status >= 400 && response.status < 500 ? 400 : 502, `Calendar provider request failed (${response.status}): ${data.error?.message || text || response.statusText}`);
     return data as T;
+  }
+
+  private static async fetchGraphPages<T>(url: string, accessToken: string): Promise<T[]> {
+    const items: T[] = [];
+    let nextUrl: string | undefined = url;
+    while (nextUrl) {
+      const data: { value?: T[]; '@odata.nextLink'?: string } = await CalendarProviderUtil.fetchJson(nextUrl, accessToken);
+      items.push(...(data.value || []));
+      nextUrl = data['@odata.nextLink'];
+    }
+    return items;
+  }
+
+  private static parseJson<T>(text: string): T | undefined {
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private static eventOverlapsRange(event: CalendarEvent, range: CalendarEventRange): boolean {
+    if (!range.start && !range.end) return true;
+    const eventStart = CalendarProviderUtil.toTime(event.start.dateTime || event.start.date);
+    const eventEnd = CalendarProviderUtil.toTime(event.end.dateTime || event.end.date) ?? eventStart;
+    const rangeStart = CalendarProviderUtil.toTime(range.start) ?? Number.NEGATIVE_INFINITY;
+    const rangeEnd = CalendarProviderUtil.toTime(range.end) ?? Number.POSITIVE_INFINITY;
+    if (eventStart === undefined) return true;
+    return eventStart < rangeEnd && (eventEnd ?? eventStart) > rangeStart;
+  }
+
+  private static toTime(value?: string | undefined): number | undefined {
+    if (!value) return undefined;
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00Z`) : new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date.getTime();
   }
 
   private static fromGoogleEvent(event: GoogleEvent): CalendarEvent {
@@ -142,6 +196,7 @@ class CalendarProviderUtil {
   }
 }
 
+interface CalendarEventRange { start?: string | undefined; end?: string | undefined }
 interface GoogleCalendar { id: string; summary?: string; description?: string; timeZone?: string; accessRole?: string; etag?: string }
 interface GoogleEvent { id?: string; iCalUID?: string; etag?: string; summary?: string; description?: string; location?: string; status?: string; start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string }; created?: string; updated?: string; recurrence?: string[]; attendees?: Array<{ email: string; displayName?: string }> }
 interface GraphCalendar { id: string; name?: string; canEdit?: boolean; changeKey?: string }

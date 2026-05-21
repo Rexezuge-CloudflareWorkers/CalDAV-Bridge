@@ -179,7 +179,7 @@ export default function SpaApp() {
     <div className="screen">
       <header>
         <div>
-          <span>Cal</span>Bridge
+          <span>CalDAV</span> Bridge
         </div>
         <small>{user.email}</small>
       </header>

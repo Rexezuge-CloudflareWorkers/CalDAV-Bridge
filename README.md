@@ -40,7 +40,7 @@ User.Read Calendars.ReadWrite offline_access
 
 ## CalDAV
 
-Use the management UI to generate one or more CalDAV app passwords for a connected application. The password is shown once.
+Use the management UI to generate one or more CalDAV usernames and app passwords for a connected application. The password is shown once.
 
 CalDAV base URL:
 
@@ -48,7 +48,7 @@ CalDAV base URL:
 https://your-domain.example/dav/calendars/{applicationId}/
 ```
 
-Username can be the connected application id or the credential name; authentication is resolved by the generated app password.
+Use the generated CalDAV username and generated app password in your CalDAV client. The username has the format `<animal><4 digits>`, for example `otter4821`.
 
 ## Commands
 

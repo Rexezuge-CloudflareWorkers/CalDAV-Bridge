@@ -25,6 +25,7 @@ interface ConnectedApplication {
 interface CalDavCredential {
   credentialId: string;
   name: string;
+  username: string;
   passwordPrefix: string;
   passwordLastFour: string;
   expiresAt: number;
@@ -65,6 +66,7 @@ export default function SpaApp() {
   const [credentials, setCredentials] = useState<CalDavCredential[]>([]);
   const [calendars, setCalendars] = useState<ProviderCalendar[]>([]);
   const [credentialName, setCredentialName] = useState('Desktop calendar');
+  const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -97,7 +99,9 @@ export default function SpaApp() {
   }
 
   async function loadCredentials(applicationId: string) {
-    const data = await readJson<{ credentials: CalDavCredential[] }>(await fetch(`/user/application/caldav-credentials?applicationId=${encodeURIComponent(applicationId)}`));
+    const data = await readJson<{ credentials: CalDavCredential[] }>(
+      await fetch(`/user/application/caldav-credentials?applicationId=${encodeURIComponent(applicationId)}`),
+    );
     setCredentials(data.credentials);
   }
 
@@ -107,7 +111,9 @@ export default function SpaApp() {
       setCalendars([]);
       return;
     }
-    const data = await readJson<{ calendars: ProviderCalendar[] }>(await fetch(`/user/application/calendars?applicationId=${encodeURIComponent(applicationId)}`));
+    const data = await readJson<{ calendars: ProviderCalendar[] }>(
+      await fetch(`/user/application/calendars?applicationId=${encodeURIComponent(applicationId)}`),
+    );
     setCalendars(data.calendars);
   }
 
@@ -148,8 +154,9 @@ export default function SpaApp() {
         body: JSON.stringify({ applicationId: selectedApplicationId, name: credentialName }),
       }),
     );
+    setNewUsername(data.metadata.username);
     setNewPassword(data.password);
-    setNotice('CalDAV password created. Save it now; it will not be shown again.');
+    setNotice('CalDAV credentials created. Save the password now; it will not be shown again.');
     await loadCredentials(selectedApplicationId);
   }
 
@@ -171,36 +178,123 @@ export default function SpaApp() {
   return (
     <div className="screen">
       <header>
-        <div><span>Cal</span>Bridge</div>
+        <div>
+          <span>Cal</span>Bridge
+        </div>
         <small>{user.email}</small>
       </header>
       {(notice || error) && <div className={error ? 'notice error' : 'notice'}>{error || notice}</div>}
       <main>
         <section className="panel create">
           <h1>Connect Calendar</h1>
-          <label>Name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Work calendar" /></label>
-          <label>Provider<select value={providerId} onChange={(event) => setProviderId(event.target.value as ProviderId)}><option value="google-calendar">Google Calendar</option><option value="microsoft-outlook-calendar">Outlook Calendar</option></select></label>
-          <label>OAuth client ID<input value={clientId} onChange={(event) => setClientId(event.target.value)} /></label>
-          <label>OAuth client secret<input value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} type="password" /></label>
+          <label>
+            Name
+            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Work calendar" />
+          </label>
+          <label>
+            Provider
+            <select value={providerId} onChange={(event) => setProviderId(event.target.value as ProviderId)}>
+              <option value="google-calendar">Google Calendar</option>
+              <option value="microsoft-outlook-calendar">Outlook Calendar</option>
+            </select>
+          </label>
+          <label>
+            OAuth client ID
+            <input value={clientId} onChange={(event) => setClientId(event.target.value)} />
+          </label>
+          <label>
+            OAuth client secret
+            <input value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} type="password" />
+          </label>
           <button onClick={() => saveApplication().catch((saveError) => setError(saveError.message))}>Create Application</button>
         </section>
         <section className="panel list">
-          <div className="section-title"><h2>Applications</h2><span>{applications.length}/{user.limits.maxApplicationsPerUser}</span></div>
-          {applications.map((application) => <button className={application.applicationId === selectedApplicationId ? 'card selected' : 'card'} key={application.applicationId} onClick={() => setSelectedApplicationId(application.applicationId)}><strong>{application.displayName}</strong><small>{providerLabels[application.providerId]} · {application.status}</small><small>{application.providerEmail || 'OAuth not connected'}</small></button>)}
+          <div className="section-title">
+            <h2>Applications</h2>
+            <span>
+              {applications.length}/{user.limits.maxApplicationsPerUser}
+            </span>
+          </div>
+          {applications.map((application) => (
+            <button
+              className={application.applicationId === selectedApplicationId ? 'card selected' : 'card'}
+              key={application.applicationId}
+              onClick={() => setSelectedApplicationId(application.applicationId)}
+            >
+              <strong>{application.displayName}</strong>
+              <small>
+                {providerLabels[application.providerId]} · {application.status}
+              </small>
+              <small>{application.providerEmail || 'OAuth not connected'}</small>
+            </button>
+          ))}
         </section>
         <section className="panel detail">
-          {selectedApplication ? <>
-            <h2>{selectedApplication.displayName}</h2>
-            <p className="muted">Redirect URI: <code>{selectedApplication.oauth2RedirectUri}</code></p>
-            <p className="muted">CalDAV URL: <code>{selectedApplication.caldavBaseUrl}</code></p>
-            <button onClick={() => startOAuth2(selectedApplication.applicationId).catch((oauthError) => setError(oauthError.message))}>Connect OAuth2</button>
-            <h3>CalDAV App Passwords</h3>
-            <div className="row"><input value={credentialName} onChange={(event) => setCredentialName(event.target.value)} /><button onClick={() => createCredential().catch((credentialError) => setError(credentialError.message))}>Generate</button></div>
-            {newPassword && <div className="secret"><strong>New password:</strong><code>{newPassword}</code></div>}
-            <table><tbody>{credentials.map((credential) => <tr key={credential.credentialId}><td>{credential.name}</td><td><code>{credential.passwordPrefix}...{credential.passwordLastFour}</code></td><td>{formatTimestamp(credential.lastUsedAt)}</td><td><button onClick={() => deleteCredential(credential.credentialId).catch((deleteError) => setError(deleteError.message))}>Delete</button></td></tr>)}</tbody></table>
-            <h3>Calendars</h3>
-            <div className="calendar-grid">{calendars.map((calendar) => <div className="calendar" key={calendar.id}><strong>{calendar.name}</strong><small>{calendar.timeZone || 'Provider timezone'} {calendar.readOnly ? '· read-only' : ''}</small></div>)}</div>
-          </> : <p>Select an application.</p>}
+          {selectedApplication ? (
+            <>
+              <h2>{selectedApplication.displayName}</h2>
+              <p className="muted">
+                Redirect URI: <code>{selectedApplication.oauth2RedirectUri}</code>
+              </p>
+              <p className="muted">
+                CalDAV URL: <code>{selectedApplication.caldavBaseUrl}</code>
+              </p>
+              <button onClick={() => startOAuth2(selectedApplication.applicationId).catch((oauthError) => setError(oauthError.message))}>
+                Connect OAuth2
+              </button>
+              <h3>CalDAV App Passwords</h3>
+              <div className="row">
+                <input value={credentialName} onChange={(event) => setCredentialName(event.target.value)} />
+                <button onClick={() => createCredential().catch((credentialError) => setError(credentialError.message))}>Generate</button>
+              </div>
+              {newPassword && (
+                <div className="secret">
+                  <strong>New username:</strong>
+                  <code>{newUsername}</code>
+                  <strong>New password:</strong>
+                  <code>{newPassword}</code>
+                </div>
+              )}
+              <table>
+                <tbody>
+                  {credentials.map((credential) => (
+                    <tr key={credential.credentialId}>
+                      <td>{credential.name}</td>
+                      <td>
+                        <code>{credential.username}</code>
+                      </td>
+                      <td>
+                        <code>
+                          {credential.passwordPrefix}...{credential.passwordLastFour}
+                        </code>
+                      </td>
+                      <td>{formatTimestamp(credential.lastUsedAt)}</td>
+                      <td>
+                        <button
+                          onClick={() => deleteCredential(credential.credentialId).catch((deleteError) => setError(deleteError.message))}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <h3>Calendars</h3>
+              <div className="calendar-grid">
+                {calendars.map((calendar) => (
+                  <div className="calendar" key={calendar.id}>
+                    <strong>{calendar.name}</strong>
+                    <small>
+                      {calendar.timeZone || 'Provider timezone'} {calendar.readOnly ? '· read-only' : ''}
+                    </small>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p>Select an application.</p>
+          )}
         </section>
       </main>
     </div>

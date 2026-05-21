@@ -46,7 +46,9 @@ class CalDavBridgeWorker {
     app.get('/user/application/caldav-credentials', async (c) => safe(() => this.listCalDavCredentials(c.req.raw, c.env)));
     app.post('/user/application/caldav-credential', async (c) => safe(() => this.createCalDavCredential(c.req.raw, c.env)));
     app.delete('/user/application/caldav-credential', async (c) => safe(() => this.deleteCalDavCredential(c.req.raw, c.env)));
-    app.get('/api/oauth2/callback/:applicationId', async (c) => safe(() => this.oauth2Callback(c.req.raw, c.env, c.req.param('applicationId'))));
+    app.get('/api/oauth2/callback/:applicationId', async (c) =>
+      safe(() => this.oauth2Callback(c.req.raw, c.env, c.req.param('applicationId'))),
+    );
 
     app.all('/dav', async (c) => safeDav(() => this.handleDav(c.req.raw, c.env)));
     app.all('/dav/*', async (c) => safeDav(() => this.handleDav(c.req.raw, c.env)));
@@ -69,8 +71,14 @@ class CalDavBridgeWorker {
       email,
       limits: {
         maxApplicationsPerUser: ConfigurationUtil.getPositiveInteger(env.MAX_APPLICATIONS_PER_USER, DEFAULT_MAX_APPLICATIONS_PER_USER),
-        maxCalDavCredentialsPerApplication: ConfigurationUtil.getPositiveInteger(env.MAX_CALDAV_CREDENTIALS_PER_APPLICATION, DEFAULT_MAX_CALDAV_CREDENTIALS_PER_APPLICATION),
-        defaultCalDavCredentialExpiryDays: ConfigurationUtil.getPositiveInteger(env.DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS, DEFAULT_DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS),
+        maxCalDavCredentialsPerApplication: ConfigurationUtil.getPositiveInteger(
+          env.MAX_CALDAV_CREDENTIALS_PER_APPLICATION,
+          DEFAULT_MAX_CALDAV_CREDENTIALS_PER_APPLICATION,
+        ),
+        defaultCalDavCredentialExpiryDays: ConfigurationUtil.getPositiveInteger(
+          env.DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS,
+          DEFAULT_DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS,
+        ),
       },
     });
   }
@@ -80,7 +88,9 @@ class CalDavBridgeWorker {
     const applicationDAO = await this.applicationDAO(env);
     const credentialDAO = new CalDavCredentialDAO(env.DB);
     const applications = await Promise.all(
-      (await applicationDAO.listMetadataByUserEmail(email)).map(async (application) => this.decorateApplication(request, application, credentialDAO)),
+      (await applicationDAO.listMetadataByUserEmail(email)).map(async (application) =>
+        this.decorateApplication(request, application, credentialDAO),
+      ),
     );
     return jsonResponse({ applications });
   }
@@ -91,8 +101,12 @@ class CalDavBridgeWorker {
     await new UserDAO(env.DB).ensure(email);
     const applicationDAO = await this.applicationDAO(env);
     const maxApplications = ConfigurationUtil.getPositiveInteger(env.MAX_APPLICATIONS_PER_USER, DEFAULT_MAX_APPLICATIONS_PER_USER);
-    if ((await applicationDAO.countByUserEmail(email)) >= maxApplications) throw new HttpError(400, `Maximum ${maxApplications} applications allowed per user.`);
-    const application = await applicationDAO.create(email, body.displayName, body.providerId, { clientId: body.clientId, clientSecret: body.clientSecret });
+    if ((await applicationDAO.countByUserEmail(email)) >= maxApplications)
+      throw new HttpError(400, `Maximum ${maxApplications} applications allowed per user.`);
+    const application = await applicationDAO.create(email, body.displayName, body.providerId, {
+      clientId: body.clientId,
+      clientSecret: body.clientSecret,
+    });
     return jsonResponse({ application: await this.decorateApplication(request, application, new CalDavCredentialDAO(env.DB)) });
   }
 
@@ -100,7 +114,10 @@ class CalDavBridgeWorker {
     const body = await this.validatedBody<CreateApplicationInput & { applicationId: string }>(request);
     const email = await this.requireUserEmail(request, env);
     const applicationDAO = await this.applicationDAO(env);
-    const application = await applicationDAO.updateForUser(body.applicationId, email, body.displayName, { clientId: body.clientId, clientSecret: body.clientSecret });
+    const application = await applicationDAO.updateForUser(body.applicationId, email, body.displayName, {
+      clientId: body.clientId,
+      clientSecret: body.clientSecret,
+    });
     if (!application) throw new HttpError(404, 'Connected application was not found.');
     return jsonResponse({ application: await this.decorateApplication(request, application, new CalDavCredentialDAO(env.DB)) });
   }
@@ -121,10 +138,25 @@ class CalDavBridgeWorker {
     const codeVerifier = OAuth2StateUtil.generateCodeVerifier();
     const codeChallenge = await OAuth2StateUtil.getCodeChallenge(codeVerifier);
     const redirectUri = `${BaseUrlUtil.getBaseUrl(request)}/api/oauth2/callback/${application.applicationId}`;
-    const expiresAt = TimestampUtil.addMinutes(TimestampUtil.getCurrentUnixTimestampInSeconds(), ConfigurationUtil.getPositiveInteger(env.OAUTH2_STATE_EXPIRY_MINUTES, DEFAULT_OAUTH2_STATE_EXPIRY_MINUTES));
-    await new OAuth2AuthorizationSessionDAO(env.DB).create(application.applicationId, await OAuth2StateUtil.getStateHash(state), codeVerifier, redirectUri, expiresAt);
+    const expiresAt = TimestampUtil.addMinutes(
+      TimestampUtil.getCurrentUnixTimestampInSeconds(),
+      ConfigurationUtil.getPositiveInteger(env.OAUTH2_STATE_EXPIRY_MINUTES, DEFAULT_OAUTH2_STATE_EXPIRY_MINUTES),
+    );
+    await new OAuth2AuthorizationSessionDAO(env.DB).create(
+      application.applicationId,
+      await OAuth2StateUtil.getStateHash(state),
+      codeVerifier,
+      redirectUri,
+      expiresAt,
+    );
     return jsonResponse({
-      authorizationUrl: OAuth2ProviderUtil.buildAuthorizationUrl({ providerId: application.providerId, clientId: application.credentials.clientId, redirectUri, state, codeChallenge }),
+      authorizationUrl: OAuth2ProviderUtil.buildAuthorizationUrl({
+        providerId: application.providerId,
+        clientId: application.credentials.clientId,
+        redirectUri,
+        state,
+        codeChallenge,
+      }),
       redirectUri,
       expiresAt,
     });
@@ -160,17 +192,44 @@ class CalDavBridgeWorker {
   private async createCalDavCredential(request: Request, env: Env): Promise<Response> {
     const body = await this.validatedBody<{ applicationId: string; name: string; expiresInDays?: number }>(request);
     const application = await this.requireUserApplication(request, env, body.applicationId);
-    if (application.status !== CONNECTED_APPLICATION_STATUS_CONNECTED) throw new HttpError(400, 'Connect OAuth2 before creating CalDAV credentials.');
+    if (application.status !== CONNECTED_APPLICATION_STATUS_CONNECTED)
+      throw new HttpError(400, 'Connect OAuth2 before creating CalDAV credentials.');
     const credentialDAO = new CalDavCredentialDAO(env.DB);
-    const maxCredentials = ConfigurationUtil.getPositiveInteger(env.MAX_CALDAV_CREDENTIALS_PER_APPLICATION, DEFAULT_MAX_CALDAV_CREDENTIALS_PER_APPLICATION);
-    if ((await credentialDAO.countByApplication(application.applicationId)) >= maxCredentials) throw new HttpError(400, `Maximum ${maxCredentials} CalDAV credentials allowed per application.`);
-    const defaultDays = ConfigurationUtil.getPositiveInteger(env.DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS, DEFAULT_DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS);
+    const maxCredentials = ConfigurationUtil.getPositiveInteger(
+      env.MAX_CALDAV_CREDENTIALS_PER_APPLICATION,
+      DEFAULT_MAX_CALDAV_CREDENTIALS_PER_APPLICATION,
+    );
+    if ((await credentialDAO.countByApplication(application.applicationId)) >= maxCredentials)
+      throw new HttpError(400, `Maximum ${maxCredentials} CalDAV credentials allowed per application.`);
+    const defaultDays = ConfigurationUtil.getPositiveInteger(
+      env.DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS,
+      DEFAULT_DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS,
+    );
     const maxDays = ConfigurationUtil.getPositiveInteger(env.MAX_CALDAV_CREDENTIAL_EXPIRY_DAYS, DEFAULT_MAX_CALDAV_CREDENTIAL_EXPIRY_DAYS);
     const expiresInDays = body.expiresInDays || defaultDays;
     if (expiresInDays > maxDays) throw new HttpError(400, `CalDAV credential expiry cannot exceed ${maxDays} days.`);
     const password = CalDavCredentialUtil.generatePassword();
-    const metadata = await credentialDAO.create(application.applicationId, await CalDavCredentialUtil.hashPassword(password), body.name, CalDavCredentialUtil.getPrefix(password), CalDavCredentialUtil.getLastFour(password), TimestampUtil.addDays(TimestampUtil.getCurrentUnixTimestampInSeconds(), expiresInDays));
-    return jsonResponse({ password, metadata });
+    const passwordHash = await CalDavCredentialUtil.hashPassword(password);
+    const expiresAt = TimestampUtil.addDays(TimestampUtil.getCurrentUnixTimestampInSeconds(), expiresInDays);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const username = CalDavCredentialUtil.generateUsername();
+      if (await credentialDAO.usernameExists(username)) continue;
+      try {
+        const metadata = await credentialDAO.create(
+          application.applicationId,
+          username,
+          passwordHash,
+          body.name,
+          CalDavCredentialUtil.getPrefix(password),
+          CalDavCredentialUtil.getLastFour(password),
+          expiresAt,
+        );
+        return jsonResponse({ password, metadata });
+      } catch (error) {
+        if (!this.isUniqueConstraintError(error)) throw error;
+      }
+    }
+    throw new HttpError(500, 'Failed to generate a unique CalDAV username.');
   }
 
   private async deleteCalDavCredential(request: Request, env: Env): Promise<Response> {
@@ -191,7 +250,8 @@ class CalDavBridgeWorker {
     if (request.method === 'PROPFIND') return this.handleDavPropfind(request, env, application, path);
     if (request.method === 'REPORT') return this.handleDavReport(request, env, application, path, mappingDAO);
 
-    if (path.resource !== 'object' || !path.calendarId || !path.objectHref) throw new HttpError(405, 'Unsupported CalDAV method for this resource.');
+    if (path.resource !== 'object' || !path.calendarId || !path.objectHref)
+      throw new HttpError(405, 'Unsupported CalDAV method for this resource.');
 
     const accessToken = await OAuth2AccessTokenService.getAccessToken(application.applicationId, env);
     if (request.method === 'GET' || request.method === 'HEAD') {
@@ -204,16 +264,24 @@ class CalDavBridgeWorker {
       await this.requireWritableCalendar(application, accessToken, path.calendarId);
       const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
       if (request.headers.get('If-None-Match')?.trim() === '*' && mapping) throw new HttpError(412, 'Calendar object already exists.');
-      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), mapping?.etag || undefined)) throw new HttpError(412, 'Calendar object ETag does not match.');
+      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), mapping?.etag || undefined))
+        throw new HttpError(412, 'Calendar object ETag does not match.');
       const event = ICalendarUtil.fromICS(await request.text(), mapping?.uid || crypto.randomUUID());
-      const saved = await CalendarProviderUtil.upsertEvent(application.providerId, accessToken, path.calendarId, event, mapping?.providerEventId);
+      const saved = await CalendarProviderUtil.upsertEvent(
+        application.providerId,
+        accessToken,
+        path.calendarId,
+        event,
+        mapping?.providerEventId,
+      );
       await mappingDAO.upsert(application.applicationId, path.calendarId, path.objectHref, saved.id || event.uid, saved.uid, saved.etag);
       return new Response(null, { status: mapping ? 204 : 201, headers: { ETag: CalDavUtil.eventEtag(saved), Location: url.pathname } });
     }
     if (request.method === 'DELETE') {
       await this.requireWritableCalendar(application, accessToken, path.calendarId);
       const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
-      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), mapping?.etag || undefined)) throw new HttpError(412, 'Calendar object ETag does not match.');
+      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), mapping?.etag || undefined))
+        throw new HttpError(412, 'Calendar object ETag does not match.');
       const providerEventId = mapping?.providerEventId || CalDavUtil.providerEventIdFromObjectHref(path.objectHref);
       await CalendarProviderUtil.deleteEvent(application.providerId, accessToken, path.calendarId, providerEventId);
       await mappingDAO.deleteByHref(application.applicationId, path.calendarId, path.objectHref);
@@ -222,7 +290,12 @@ class CalDavBridgeWorker {
     throw new HttpError(405, 'Unsupported CalDAV method.');
   }
 
-  private async handleDavPropfind(request: Request, env: Env, application: ConnectedApplication, path: ReturnType<typeof CalDavUtil.parsePath>): Promise<Response> {
+  private async handleDavPropfind(
+    request: Request,
+    env: Env,
+    application: ConnectedApplication,
+    path: ReturnType<typeof CalDavUtil.parsePath>,
+  ): Promise<Response> {
     const propfind = CalDavUtil.parsePropfind(await request.text());
     const depth = CalDavUtil.parseDepth(request.headers.get('Depth'));
     if (path.resource === 'root') return CalDavUtil.propfindRoot(application.applicationId, propfind);
@@ -236,18 +309,32 @@ class CalDavBridgeWorker {
     if (path.resource === 'calendar' && path.calendarId) {
       const calendar = await this.requireCalendar(application, accessToken, path.calendarId);
       const events = depth > 0 ? await CalendarProviderUtil.listEvents(application.providerId, accessToken, path.calendarId) : [];
-      if (events.length) await this.upsertMappings(new CalendarObjectMappingDAO(env.DB), application.applicationId, path.calendarId, events);
+      if (events.length)
+        await this.upsertMappings(new CalendarObjectMappingDAO(env.DB), application.applicationId, path.calendarId, events);
       return CalDavUtil.propfindCalendar(application.applicationId, calendar, propfind, depth, events);
     }
     if (path.resource === 'object' && path.calendarId && path.objectHref) {
-      const event = await this.getDavObject(application, accessToken, new CalendarObjectMappingDAO(env.DB), path.calendarId, path.objectHref);
+      const event = await this.getDavObject(
+        application,
+        accessToken,
+        new CalendarObjectMappingDAO(env.DB),
+        path.calendarId,
+        path.objectHref,
+      );
       return CalDavUtil.propfindObject(application.applicationId, path.calendarId, path.objectHref, event, propfind);
     }
     return CalDavUtil.notFound(new URL(request.url).pathname);
   }
 
-  private async handleDavReport(request: Request, env: Env, application: ConnectedApplication, path: ReturnType<typeof CalDavUtil.parsePath>, mappingDAO: CalendarObjectMappingDAO): Promise<Response> {
-    if (path.resource !== 'calendar' || !path.calendarId) throw new HttpError(405, 'CalDAV reports are only supported on calendar collections.');
+  private async handleDavReport(
+    request: Request,
+    env: Env,
+    application: ConnectedApplication,
+    path: ReturnType<typeof CalDavUtil.parsePath>,
+    mappingDAO: CalendarObjectMappingDAO,
+  ): Promise<Response> {
+    if (path.resource !== 'calendar' || !path.calendarId)
+      throw new HttpError(405, 'CalDAV reports are only supported on calendar collections.');
     const report = CalDavUtil.parseReport(await request.text());
     if (report.type === 'sync-collection') throw new HttpError(501, 'CalDAV sync-collection is not advertised or supported yet.');
     if (report.type !== 'calendar-query' && report.type !== 'calendar-multiget') throw new HttpError(400, 'Unsupported CalDAV report.');
@@ -283,7 +370,13 @@ class CalDavBridgeWorker {
     return CalDavUtil.calendarObjectReport(application.applicationId, path.calendarId, results, report.properties);
   }
 
-  private async getDavObject(application: ConnectedApplication, accessToken: string, mappingDAO: CalendarObjectMappingDAO, calendarId: string, objectHref: string): Promise<CalendarEvent> {
+  private async getDavObject(
+    application: ConnectedApplication,
+    accessToken: string,
+    mappingDAO: CalendarObjectMappingDAO,
+    calendarId: string,
+    objectHref: string,
+  ): Promise<CalendarEvent> {
     const mapping = await mappingDAO.getByHref(application.applicationId, calendarId, objectHref);
     const providerEventId = mapping?.providerEventId || CalDavUtil.providerEventIdFromObjectHref(objectHref);
     const event = await CalendarProviderUtil.getEvent(application.providerId, accessToken, calendarId, providerEventId);
@@ -302,8 +395,17 @@ class CalDavBridgeWorker {
     if (calendar.readOnly) throw new HttpError(403, 'Calendar collection is read-only.');
   }
 
-  private async upsertMappings(mappingDAO: CalendarObjectMappingDAO, applicationId: string, calendarId: string, events: CalendarEvent[]): Promise<void> {
-    await Promise.all(events.map((event) => mappingDAO.upsert(applicationId, calendarId, ICalendarUtil.eventHref(event), event.id || event.uid, event.uid, event.etag)));
+  private async upsertMappings(
+    mappingDAO: CalendarObjectMappingDAO,
+    applicationId: string,
+    calendarId: string,
+    events: CalendarEvent[],
+  ): Promise<void> {
+    await Promise.all(
+      events.map((event) =>
+        mappingDAO.upsert(applicationId, calendarId, ICalendarUtil.eventHref(event), event.id || event.uid, event.uid, event.etag),
+      ),
+    );
   }
 
   private async authenticateDav(request: Request, env: Env, applicationId?: string | undefined): Promise<ConnectedApplication> {
@@ -316,10 +418,11 @@ class CalDavBridgeWorker {
       return unauthorizedDav();
     }
     const separatorIndex = decoded.indexOf(':');
+    const username = separatorIndex >= 0 ? decoded.slice(0, separatorIndex) : '';
     const password = separatorIndex >= 0 ? decoded.slice(separatorIndex + 1) : '';
-    if (!password) return unauthorizedDav();
+    if (!username || !password) return unauthorizedDav();
     const credentialDAO = new CalDavCredentialDAO(env.DB);
-    const credential = await credentialDAO.getByHash(await CalDavCredentialUtil.hashPassword(password), true);
+    const credential = await credentialDAO.getByUsernameAndHash(username, await CalDavCredentialUtil.hashPassword(password), true);
     if (!credential || (applicationId && credential.applicationId !== applicationId)) return unauthorizedDav();
     await credentialDAO.updateLastUsed(credential.credentialId);
     const application = await (await this.applicationDAO(env)).getById(credential.applicationId);
@@ -362,12 +465,14 @@ class CalDavBridgeWorker {
     const envRecord = env as unknown as Record<string, unknown>;
     const teamDomain = envRecord.TEAM_DOMAIN as string | undefined;
     const policyAud = envRecord.POLICY_AUD as string | undefined;
-    if (!teamDomain || !policyAud) throw new HttpError(401, 'Missing required JWT verification configuration (TEAM_DOMAIN or POLICY_AUD not set).');
+    if (!teamDomain || !policyAud)
+      throw new HttpError(401, 'Missing required JWT verification configuration (TEAM_DOMAIN or POLICY_AUD not set).');
 
     const normalizedTeamDomain = teamDomain.replace(/\/+$/, '');
     const normalizedPolicyAud = policyAud.trim();
     if (!normalizedPolicyAud) throw new HttpError(401, 'Missing required JWT verification configuration (empty POLICY_AUD).');
-    if (normalizedPolicyAud.includes(',')) throw new HttpError(401, 'Multiple JWT audiences are not supported. Configure a single POLICY_AUD value.');
+    if (normalizedPolicyAud.includes(','))
+      throw new HttpError(401, 'Multiple JWT audiences are not supported. Configure a single POLICY_AUD value.');
 
     let email: string | undefined;
     try {
@@ -389,7 +494,15 @@ class CalDavBridgeWorker {
     return new ConnectedApplicationDAO(env.DB, await env.AES_ENCRYPTION_KEY_SECRET.get());
   }
 
-  private async decorateApplication(request: Request, application: ConnectedApplicationMetadata, credentialDAO: CalDavCredentialDAO): Promise<ConnectedApplicationMetadata> {
+  private isUniqueConstraintError(error: unknown): boolean {
+    return error instanceof Error && /unique constraint/i.test(error.message);
+  }
+
+  private async decorateApplication(
+    request: Request,
+    application: ConnectedApplicationMetadata,
+    credentialDAO: CalDavCredentialDAO,
+  ): Promise<ConnectedApplicationMetadata> {
     return {
       ...application,
       oauth2RedirectUri: `${BaseUrlUtil.getBaseUrl(request)}/api/oauth2/callback/${application.applicationId}`,

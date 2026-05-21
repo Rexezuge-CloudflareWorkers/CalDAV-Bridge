@@ -2,6 +2,7 @@ interface CalDavCredentialMetadata {
   credentialId: string;
   applicationId: string;
   name: string;
+  username: string;
   passwordPrefix: string;
   passwordLastFour: string;
   createdAt: number;
@@ -18,6 +19,7 @@ interface CalDavCredentialInternal {
   application_id: string;
   password_hash: string;
   name: string;
+  username: string;
   password_prefix: string;
   password_last_four: string;
   created_at: number;

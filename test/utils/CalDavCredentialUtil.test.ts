@@ -11,4 +11,10 @@ describe('CalDavCredentialUtil', () => {
     expect(CalDavCredentialUtil.getLastFour(password)).toBe(password.slice(-4));
     await expect(CalDavCredentialUtil.hashPassword(password)).resolves.toMatch(/^[0-9a-f]{64}$/);
   });
+
+  it('generates CalDAV usernames from an animal and four digits', () => {
+    const username = CalDavCredentialUtil.generateUsername();
+
+    expect(username).toMatch(/^[a-z]+\d{4}$/);
+  });
 });

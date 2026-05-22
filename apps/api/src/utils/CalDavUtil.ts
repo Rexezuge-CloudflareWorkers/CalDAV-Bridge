@@ -124,14 +124,20 @@ class CalDavUtil {
     return CalDavUtil.multistatus(responses);
   }
 
-  public static propfindCalendar(applicationId: string, calendar: ProviderCalendar, request: DavPropfindRequest, depth: number, events: CalendarEvent[] = []): Response {
+  public static propfindCalendar(applicationId: string, calendar: ProviderCalendar, request: DavPropfindRequest, depth: number, objects: DavCalendarObjectResult[] = []): Response {
     const responses = [CalDavUtil.resourceResponse(CalDavUtil.calendarHref(applicationId, calendar.id), request, 'calendar', { applicationId, calendar, calendarId: calendar.id })];
     if (depth > 0) {
       responses.push(
-        ...events.map((event) => {
-          const href = ICalendarUtil.eventHref(event);
-          return CalDavUtil.resourceResponse(CalDavUtil.objectHref(applicationId, calendar.id, href), request, 'object', { applicationId, calendarId: calendar.id, event, objectHref: href });
-        }),
+        ...objects
+          .filter((object): object is DavCalendarObjectResult & { event: CalendarEvent } => Boolean(object.event))
+          .map((object) =>
+            CalDavUtil.resourceResponse(CalDavUtil.objectHref(applicationId, calendar.id, object.href), request, 'object', {
+              applicationId,
+              calendarId: calendar.id,
+              event: object.event,
+              objectHref: object.href,
+            }),
+          ),
       );
     }
     return CalDavUtil.multistatus(responses);

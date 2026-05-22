@@ -68,13 +68,16 @@ describe('CalDavUtil', () => {
       1,
       [
         {
-          id: 'provider/id',
-          uid: 'event-1@example.com',
-          etag: 'etag-1',
-          summary: 'Planning',
-          start: { dateTime: '2026-05-21T10:00:00Z' },
-          end: { dateTime: '2026-05-21T11:00:00Z' },
-          updated: '2026-05-21T09:00:00Z',
+          href: 'provider-id.ics',
+          event: {
+            id: 'provider/id',
+            uid: 'event-1@example.com',
+            etag: 'etag-1',
+            summary: 'Planning',
+            start: { dateTime: '2026-05-21T10:00:00Z' },
+            end: { dateTime: '2026-05-21T11:00:00Z' },
+            updated: '2026-05-21T09:00:00Z',
+          },
         },
       ],
     ).text();

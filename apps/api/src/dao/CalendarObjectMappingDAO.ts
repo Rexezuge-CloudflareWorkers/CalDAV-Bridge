@@ -44,8 +44,23 @@ class CalendarObjectMappingDAO {
     return row ? this.toMapping(row) : undefined;
   }
 
-  public async upsert(applicationId: string, calendarId: string, href: string, providerEventId: string, uid: string, etag?: string): Promise<void> {
+  public async upsert(applicationId: string, calendarId: string, href: string, providerEventId: string, uid: string, etag?: string): Promise<CalendarObjectMapping> {
     const now = TimestampUtil.getCurrentUnixTimestampInSeconds();
+    const existingProviderMapping = await this.getByProviderEventId(applicationId, calendarId, providerEventId);
+    if (existingProviderMapping && existingProviderMapping.href !== href) {
+      await this.database
+        .prepare(
+          `
+            UPDATE calendar_object_mappings
+            SET uid = ?, etag = ?, updated_at = ?
+            WHERE application_id = ? AND calendar_id = ? AND provider_event_id = ?
+          `,
+        )
+        .bind(uid, etag || null, now, applicationId, calendarId, providerEventId)
+        .run();
+      return { ...existingProviderMapping, uid, etag: etag || null };
+    }
+
     await this.database
       .prepare(
         `
@@ -61,6 +76,9 @@ class CalendarObjectMappingDAO {
       )
       .bind(UUIDUtil.getRandomUUID(), applicationId, calendarId, href, providerEventId, uid, etag || null, now, now)
       .run();
+    const mapping = await this.getByHref(applicationId, calendarId, href);
+    if (!mapping) throw new Error('Failed to read calendar object mapping after upsert.');
+    return mapping;
   }
 
   public async deleteByHref(applicationId: string, calendarId: string, href: string): Promise<void> {

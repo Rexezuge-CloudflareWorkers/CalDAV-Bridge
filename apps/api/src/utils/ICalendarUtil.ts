@@ -7,8 +7,19 @@ class ICalendarUtil {
       'VERSION:2.0',
       'PRODID:-//CalDAV Bridge//CalDAV Bridge//EN',
       'CALSCALE:GREGORIAN',
+      ...ICalendarUtil.eventLines(event),
+      ...(event.overrides || []).flatMap((override) => ICalendarUtil.eventLines({ ...override, uid: event.uid }, true)),
+      'END:VCALENDAR',
+      '',
+    ];
+    return ICalendarUtil.foldLines(lines).join('\r\n');
+  }
+
+  private static eventLines(event: CalendarEvent, isOverride = false): string[] {
+    return [
       'BEGIN:VEVENT',
       `UID:${ICalendarUtil.escape(event.uid)}`,
+      ...(event.recurrenceId ? [ICalendarUtil.dateLine('RECURRENCE-ID', event.recurrenceId)] : []),
       `DTSTAMP:${ICalendarUtil.toUtcStamp(event.updated || event.created || new Date().toISOString())}`,
       ...(event.created ? [`CREATED:${ICalendarUtil.toUtcStamp(event.created)}`] : []),
       ...(event.updated ? [`LAST-MODIFIED:${ICalendarUtil.toUtcStamp(event.updated)}`] : []),
@@ -18,13 +29,10 @@ class ICalendarUtil {
       ...(event.status ? [`STATUS:${event.status.toUpperCase()}`] : []),
       ICalendarUtil.dateLine('DTSTART', event.start),
       ICalendarUtil.dateLine('DTEND', event.end),
-      ...(event.recurrence || []),
+      ...(!isOverride ? event.recurrence || [] : []),
       ...(event.attendees || []).map((attendee) => `ATTENDEE;CN=${ICalendarUtil.escapeParam(attendee.name || attendee.email)}:mailto:${attendee.email}`),
       'END:VEVENT',
-      'END:VCALENDAR',
-      '',
     ];
-    return ICalendarUtil.foldLines(lines).join('\r\n');
   }
 
   public static fromICS(ics: string, fallbackUid: string): CalendarEvent {

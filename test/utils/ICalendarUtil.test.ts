@@ -131,6 +131,31 @@ describe('ICalendarUtil', () => {
     expect(ICalendarUtil.fromICS(ics, 'fallback').recurrence).toEqual(['RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;COUNT=5']);
   });
 
+  it('emits recurrence override VEVENTs with recurrence ids', () => {
+    const ics = ICalendarUtil.toICS({
+      uid: 'series@example.test',
+      summary: 'Weekly sync',
+      start: { dateTime: '2026-05-04T10:00:00Z' },
+      end: { dateTime: '2026-05-04T10:30:00Z' },
+      recurrence: ['RRULE:FREQ=WEEKLY;COUNT=3'],
+      overrides: [
+        {
+          uid: 'series@example.test',
+          recurrenceId: { dateTime: '2026-05-11T10:00:00Z', timeZone: 'UTC' },
+          summary: 'Moved sync',
+          start: { dateTime: '2026-05-11T11:00:00Z' },
+          end: { dateTime: '2026-05-11T11:30:00Z' },
+        },
+      ],
+    });
+    const unfolded = unfold(ics);
+
+    expect(unfolded.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+    expect(unfolded).toContain('RRULE:FREQ=WEEKLY;COUNT=3');
+    expect(unfolded).toContain('RECURRENCE-ID:20260511T100000Z');
+    expect(unfolded).toContain('SUMMARY:Moved sync');
+  });
+
   it('quotes attendee CN parameters with iCalendar-safe escaping', () => {
     const ics = ICalendarUtil.toICS({
       uid: 'event-1@example.test',

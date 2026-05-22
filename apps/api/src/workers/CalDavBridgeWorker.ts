@@ -309,9 +309,10 @@ class CalDavBridgeWorker {
     if (path.resource === 'calendar' && path.calendarId) {
       const calendar = await this.requireCalendar(application, accessToken, path.calendarId);
       const events = depth > 0 ? await CalendarProviderUtil.listEvents(application.providerId, accessToken, path.calendarId) : [];
-      if (events.length)
-        await this.upsertMappings(new CalendarObjectMappingDAO(env.DB), application.applicationId, path.calendarId, events);
-      return CalDavUtil.propfindCalendar(application.applicationId, calendar, propfind, depth, events);
+      const objects = events.length
+        ? await this.upsertMappings(new CalendarObjectMappingDAO(env.DB), application.applicationId, path.calendarId, events)
+        : [];
+      return CalDavUtil.propfindCalendar(application.applicationId, calendar, propfind, depth, objects);
     }
     if (path.resource === 'object' && path.calendarId && path.objectHref) {
       const event = await this.getDavObject(
@@ -343,11 +344,11 @@ class CalDavBridgeWorker {
 
     if (report.type === 'calendar-query') {
       const events = await CalendarProviderUtil.listEvents(application.providerId, accessToken, path.calendarId, report.timeRange);
-      await this.upsertMappings(mappingDAO, application.applicationId, path.calendarId, events);
+      const objects = await this.upsertMappings(mappingDAO, application.applicationId, path.calendarId, events);
       return CalDavUtil.calendarObjectReport(
         application.applicationId,
         path.calendarId,
-        events.map((event) => ({ href: ICalendarUtil.eventHref(event), event })),
+        objects,
         report.properties,
       );
     }
@@ -400,10 +401,12 @@ class CalDavBridgeWorker {
     applicationId: string,
     calendarId: string,
     events: CalendarEvent[],
-  ): Promise<void> {
-    await Promise.all(
+  ): Promise<Array<{ href: string; event: CalendarEvent }>> {
+    return Promise.all(
       events.map((event) =>
-        mappingDAO.upsert(applicationId, calendarId, ICalendarUtil.eventHref(event), event.id || event.uid, event.uid, event.etag),
+        mappingDAO
+          .upsert(applicationId, calendarId, ICalendarUtil.eventHref(event), event.id || event.uid, event.uid, event.etag)
+          .then((mapping) => ({ href: mapping.href, event })),
       ),
     );
   }

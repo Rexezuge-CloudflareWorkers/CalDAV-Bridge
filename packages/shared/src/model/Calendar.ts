@@ -22,6 +22,7 @@ interface CalendarEvent {
   id?: string | undefined;
   uid: string;
   etag?: string | undefined;
+  recurrenceId?: CalendarEventDateTime | undefined;
   summary?: string | undefined;
   description?: string | undefined;
   location?: string | undefined;
@@ -32,6 +33,7 @@ interface CalendarEvent {
   updated?: string | undefined;
   recurrence?: string[] | undefined;
   attendees?: CalendarAttendee[] | undefined;
+  overrides?: CalendarEvent[] | undefined;
 }
 
 interface CalendarObjectMappingInternal {

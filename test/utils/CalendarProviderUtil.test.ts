@@ -86,7 +86,7 @@ describe('CalendarProviderUtil', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe('https://graph.microsoft.com/next');
   });
 
-  it('uses Microsoft calendarView for time-range event queries', async () => {
+  it('uses Microsoft events for time-range event queries so recurring masters can include overrides', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ value: [] }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -96,9 +96,8 @@ describe('CalendarProviderUtil', () => {
     });
 
     const url = new URL(fetchMock.mock.calls[0]?.[0] as string);
-    expect(url.pathname).toBe('/v1.0/me/calendars/calendar-id/calendarView');
-    expect(url.searchParams.get('startDateTime')).toBe('2026-05-01T00:00:00Z');
-    expect(url.searchParams.get('endDateTime')).toBe('2026-06-01T00:00:00Z');
+    expect(url.pathname).toBe('/v1.0/me/calendars/calendar-id/events');
+    expect(url.searchParams.get('$top')).toBe('250');
   });
 
   it('maps Microsoft events including HTML descriptions and attendees', async () => {
@@ -186,6 +185,64 @@ describe('CalendarProviderUtil', () => {
     const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
 
     expect(events[0]?.recurrence).toEqual(['RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=2TH;UNTIL=20261231T235959Z']);
+  });
+
+  it('maps Microsoft recurring exceptions to iCalendar overrides', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          value: [
+            {
+              id: 'series-master',
+              iCalUId: 'series@example.test',
+              subject: 'Weekly sync',
+              type: 'seriesMaster',
+              start: { dateTime: '2026-05-04T10:00:00.0000000', timeZone: 'UTC' },
+              end: { dateTime: '2026-05-04T10:30:00.0000000', timeZone: 'UTC' },
+              recurrence: {
+                pattern: { type: 'weekly', interval: 1, daysOfWeek: ['monday'] },
+                range: { type: 'numbered', startDate: '2026-05-04', numberOfOccurrences: 3 },
+              },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          value: [
+            {
+              id: 'exception-id',
+              iCalUId: 'exception@example.test',
+              subject: 'Moved sync',
+              type: 'exception',
+              seriesMasterId: 'series-master',
+              originalStart: '2026-05-11T10:00:00Z',
+              start: { dateTime: '2026-05-11T11:00:00.0000000', timeZone: 'UTC' },
+              end: { dateTime: '2026-05-11T11:30:00.0000000', timeZone: 'UTC' },
+            },
+          ],
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id', {
+      start: '2026-05-01T00:00:00Z',
+      end: '2026-06-01T00:00:00Z',
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.overrides).toEqual([
+      expect.objectContaining({
+        id: 'exception-id',
+        uid: 'series@example.test',
+        summary: 'Moved sync',
+        recurrenceId: { dateTime: '2026-05-11T10:00:00Z', timeZone: 'UTC' },
+        start: { dateTime: '2026-05-11T11:00:00.0000000', timeZone: 'UTC' },
+      }),
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toContain('/events/series-master/instances?');
   });
 
   it('retries short Microsoft Graph throttles', async () => {

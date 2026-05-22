@@ -57,12 +57,13 @@ class CalendarProviderUtil {
       } while (pageToken);
       return events.map(CalendarProviderUtil.fromGoogleEvent).filter((event) => CalendarProviderUtil.eventOverlapsRange(event, range));
     }
-    const useCalendarView = Boolean(range.start && range.end);
-    const url = useCalendarView
-      ? `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/calendarView?startDateTime=${encodeURIComponent(range.start || '')}&endDateTime=${encodeURIComponent(range.end || '')}&$top=250`
-      : `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`;
+    const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`;
     const events = await CalendarProviderUtil.fetchGraphPages<GraphEvent>(url, accessToken);
-    return events.map(CalendarProviderUtil.fromGraphEvent).filter((event) => CalendarProviderUtil.eventOverlapsRange(event, range));
+    const mappedEvents = events.map(CalendarProviderUtil.fromGraphEvent);
+    const recurringEventIdsInRange = range.start && range.end
+      ? await CalendarProviderUtil.addGraphRecurrenceOverrides(accessToken, calendarId, events, mappedEvents, { start: range.start, end: range.end })
+      : undefined;
+    return mappedEvents.filter((event) => recurringEventIdsInRange?.has(event.id || '') || CalendarProviderUtil.eventOverlapsRange(event, range));
   }
 
   public static async getEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, eventId: string): Promise<CalendarEvent> {
@@ -157,6 +158,32 @@ class CalendarProviderUtil {
     return items;
   }
 
+  private static async addGraphRecurrenceOverrides(accessToken: string, calendarId: string, graphEvents: GraphEvent[], events: CalendarEvent[], range: Required<CalendarEventRange>): Promise<Set<string>> {
+    const byId = new Map(events.map((event) => [event.id, event]));
+    const recurringEventIdsInRange = new Set<string>();
+    await Promise.all(
+      graphEvents
+        .filter((event) => event.type === 'seriesMaster' && event.id)
+        .map(async (master) => {
+          const event = byId.get(master.id);
+          if (!event) return;
+          const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(master.id || '')}/instances?startDateTime=${encodeURIComponent(range.start)}&endDateTime=${encodeURIComponent(range.end)}&$top=250`;
+          const instances = await CalendarProviderUtil.fetchGraphPages<GraphEvent>(url, accessToken);
+          if (instances.length) recurringEventIdsInRange.add(master.id || '');
+          const overrides = instances
+            .filter((instance) => instance.type === 'exception' && instance.originalStart)
+            .map((instance) => ({
+              ...CalendarProviderUtil.fromGraphEvent(instance),
+              uid: event.uid,
+              recurrenceId: { dateTime: instance.originalStart, timeZone: 'UTC' },
+              recurrence: undefined,
+            }));
+          if (overrides.length) event.overrides = overrides;
+        }),
+    );
+    return recurringEventIdsInRange;
+  }
+
   private static parseJson<T>(text: string): T | undefined {
     try {
       return JSON.parse(text) as T;
@@ -171,6 +198,7 @@ class CalendarProviderUtil {
     const eventEnd = CalendarProviderUtil.toTime(event.end.dateTime || event.end.date) ?? eventStart;
     const rangeStart = CalendarProviderUtil.toTime(range.start) ?? Number.NEGATIVE_INFINITY;
     const rangeEnd = CalendarProviderUtil.toTime(range.end) ?? Number.POSITIVE_INFINITY;
+    if (event.overrides?.some((override) => CalendarProviderUtil.eventOverlapsRange(override, range))) return true;
     if (eventStart === undefined) return true;
     return eventStart < rangeEnd && (eventEnd ?? eventStart) > rangeStart;
   }
@@ -208,6 +236,7 @@ class CalendarProviderUtil {
       id: event.id,
       uid: event.iCalUId || `${event.id}@microsoft-outlook-calendar`,
       etag: event.changeKey || event['@odata.etag'],
+      recurrenceId: event.originalStart ? { dateTime: event.originalStart, timeZone: 'UTC' } : undefined,
       summary: event.subject,
       description: event.body?.content,
       location: event.location?.displayName,
@@ -380,7 +409,7 @@ interface CalendarEventRange { start?: string | undefined; end?: string | undefi
 interface GoogleCalendar { id: string; summary?: string; description?: string; timeZone?: string; accessRole?: string; etag?: string }
 interface GoogleEvent { id?: string; iCalUID?: string; etag?: string; summary?: string; description?: string; location?: string; status?: string; start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string }; created?: string; updated?: string; recurrence?: string[]; attendees?: Array<{ email: string; displayName?: string }> }
 interface GraphCalendar { id: string; name?: string; canEdit?: boolean; changeKey?: string }
-interface GraphEvent { id?: string; iCalUId?: string; changeKey?: string; '@odata.etag'?: string; subject?: string; body?: { content?: string; contentType?: string }; location?: { displayName?: string }; isCancelled?: boolean; start?: GraphDateTimeTimeZone; end?: GraphDateTimeTimeZone; createdDateTime?: string; lastModifiedDateTime?: string; recurrence?: GraphPatternedRecurrence | null; attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }> }
+interface GraphEvent { id?: string; iCalUId?: string; changeKey?: string; '@odata.etag'?: string; subject?: string; body?: { content?: string; contentType?: string }; location?: { displayName?: string }; isCancelled?: boolean; start?: GraphDateTimeTimeZone; end?: GraphDateTimeTimeZone; createdDateTime?: string; lastModifiedDateTime?: string; originalStart?: string; recurrence?: GraphPatternedRecurrence | null; attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }>; type?: string; seriesMasterId?: string }
 interface GraphDateTimeTimeZone { dateTime?: string; timeZone?: string }
 interface GraphPatternedRecurrence { pattern?: GraphRecurrencePattern | undefined; range?: GraphRecurrenceRange | undefined }
 interface GraphRecurrencePattern { type?: string | undefined; interval?: number | undefined; daysOfWeek?: string[] | undefined; firstDayOfWeek?: string | undefined; index?: string | undefined; dayOfMonth?: number | undefined; month?: number | undefined }

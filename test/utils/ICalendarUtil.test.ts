@@ -18,6 +18,68 @@ describe('ICalendarUtil', () => {
     expect(parsed.location).toBe('Conference Room');
   });
 
+  it('escapes CRLF, CR, and LF inside text properties without creating invalid physical lines', () => {
+    const ics = ICalendarUtil.toICS({
+      uid: 'event-1@example.test',
+      summary: 'One\\Two, Three; Four\nFive\rSix\r\nSeven',
+      description: '<html>\r\n<head>\r<meta name="color-scheme" content="light dark">\n</head>\r\n<body>change &quot;Other notifications&quot;.</body>\r\n</html>',
+      location: 'Room A\r\nRoom B',
+      start: { dateTime: '2026-05-04T10:00:00Z' },
+      end: { dateTime: '2026-05-04T10:30:00Z' },
+    });
+    const unfolded = unfold(ics);
+
+    expect(ics.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+    expect(unfolded).toContain('SUMMARY:One\\\\Two\\, Three\\; Four\\nFive\\nSix\\nSeven');
+    expect(unfolded).toContain('DESCRIPTION:<html>\\n<head>\\n<meta name="color-scheme" content="light dark">\\n</head>\\n<body>change &quot\\;Other notifications&quot\\;.</body>\\n</html>');
+    expect(unfolded).toContain('LOCATION:Room A\\nRoom B');
+  });
+
+  it('folds long content using iCalendar continuation lines', () => {
+    const summary = 'A'.repeat(160);
+    const ics = ICalendarUtil.toICS({
+      uid: 'event-1@example.test',
+      summary,
+      start: { dateTime: '2026-05-04T10:00:00Z' },
+      end: { dateTime: '2026-05-04T10:30:00Z' },
+    });
+
+    expect(ics.split('\r\n').some((line) => line.startsWith(' '))).toBe(true);
+    expect(unfold(ics)).toContain(`SUMMARY:${summary}`);
+  });
+
+  it('parses folded text, all-day dates, statuses, and recurrence lines', () => {
+    const parsed = ICalendarUtil.fromICS(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'UID:event-1@example.test',
+        'SUMMARY:Planning',
+        ' review',
+        'DESCRIPTION:Line one\\nLine two',
+        'STATUS:CONFIRMED',
+        'DTSTART;VALUE=DATE:20260504',
+        'DTEND;VALUE=DATE:20260505',
+        'RRULE:FREQ=DAILY;COUNT=2',
+        'EXDATE:20260506T100000Z',
+        'END:VEVENT',
+        'END:VCALENDAR',
+        '',
+      ].join('\r\n'),
+      'fallback',
+    );
+
+    expect(parsed).toMatchObject({
+      uid: 'event-1@example.test',
+      summary: 'Planningreview',
+      description: 'Line one\nLine two',
+      status: 'confirmed',
+      start: { date: '2026-05-04' },
+      end: { date: '2026-05-05' },
+      recurrence: ['RRULE:FREQ=DAILY;COUNT=2', 'EXDATE:20260506T100000Z'],
+    });
+  });
+
   it('emits and parses recurrence rules', () => {
     const ics = ICalendarUtil.toICS({
       uid: 'event-1@example.test',
@@ -49,4 +111,23 @@ describe('ICalendarUtil', () => {
     expect(ics).toContain('ATTENDEE;CN="Office: Hours":mailto:colon@example.test');
     expect(ics).toContain('ATTENDEE;CN="The ^\'Quoted^\' Team":mailto:quote@example.test');
   });
+
+  it('uses attendee email as CN fallback and caret-escapes parameter newlines', () => {
+    const ics = ICalendarUtil.toICS({
+      uid: 'event-1@example.test',
+      start: { dateTime: '2026-05-04T10:00:00Z' },
+      end: { dateTime: '2026-05-04T10:30:00Z' },
+      attendees: [
+        { email: 'fallback@example.test' },
+        { email: 'newline@example.test', name: 'Line\r\nBreak' },
+      ],
+    });
+
+    expect(unfold(ics)).toContain('ATTENDEE;CN="fallback@example.test":mailto:fallback@example.test');
+    expect(unfold(ics)).toContain('ATTENDEE;CN="Line^nBreak":mailto:newline@example.test');
+  });
 });
+
+function unfold(ics: string): string {
+  return ics.replace(/\r\n[ \t]/g, '');
+}

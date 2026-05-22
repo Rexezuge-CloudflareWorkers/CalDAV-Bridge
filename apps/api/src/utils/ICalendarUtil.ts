@@ -80,7 +80,7 @@ class ICalendarUtil {
   }
 
   private static escape(value: string): string {
-    return value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+    return value.replace(/\\/g, '\\\\').replace(/\r\n|\r|\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
   }
 
   private static unescape(value: string): string {

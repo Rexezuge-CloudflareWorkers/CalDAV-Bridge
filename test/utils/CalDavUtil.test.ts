@@ -8,6 +8,33 @@ describe('CalDavUtil', () => {
     expect(CalDavUtil.parsePath('/dav/calendars/app-1/')).toEqual({ resource: 'calendarHome', applicationId: 'app-1' });
     expect(CalDavUtil.parsePath('/dav/calendars/app-1/cal%40example.com/')).toEqual({ resource: 'calendar', applicationId: 'app-1', calendarId: 'cal@example.com' });
     expect(CalDavUtil.parsePath('/dav/calendars/app-1/cal%40example.com/event.ics')).toEqual({ resource: 'object', applicationId: 'app-1', calendarId: 'cal@example.com', objectHref: 'event.ics' });
+    expect(CalDavUtil.parsePath('/dav/calendars/app-1/cal-1/nested%2Fevent.ics')).toEqual({ resource: 'object', applicationId: 'app-1', calendarId: 'cal-1', objectHref: 'nested/event.ics' });
+    expect(CalDavUtil.parsePath('/not-dav/')).toEqual({ resource: 'unknown' });
+  });
+
+  it('normalizes object hrefs from absolute, collection-relative, and encoded DAV hrefs', () => {
+    expect(CalDavUtil.objectHrefFromDavHref('https://example.test/dav/calendars/app-1/cal-1/nested%2Fevent.ics', 'app-1', 'cal-1')).toBe('nested/event.ics');
+    expect(CalDavUtil.objectHrefFromDavHref('/dav/calendars/app-1/cal-1/event.ics', 'app-1', 'cal-1')).toBe('event.ics');
+    expect(CalDavUtil.objectHrefFromDavHref('nested%2Fevent.ics', 'app-1', 'cal-1')).toBe('nested/event.ics');
+    expect(CalDavUtil.objectHrefFromDavHref('/dav/calendars/app-2/cal-1/event.ics', 'app-1', 'cal-1')).toBeUndefined();
+  });
+
+  it('builds escaped collection and object hrefs', () => {
+    expect(CalDavUtil.calendarHref('app 1', 'cal@example.com')).toBe('/dav/calendars/app%201/cal%40example.com/');
+    expect(CalDavUtil.objectHref('app 1', 'cal@example.com', 'nested/event.ics')).toBe('/dav/calendars/app%201/cal%40example.com/nested%2Fevent.ics');
+  });
+
+  it('parses propfind modes, direct child properties, and Depth headers', () => {
+    expect(CalDavUtil.parsePropfind('')).toEqual({ mode: 'allprop', properties: [] });
+    expect(CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:"><D:propname/></D:propfind>')).toEqual({ mode: 'propname', properties: [] });
+    expect(
+      CalDavUtil.parsePropfind(
+        '<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><D:prop><D:getetag/><C:calendar-data><C:expand/></C:calendar-data><D:getetag/></D:prop></D:propfind>',
+      ),
+    ).toEqual({ mode: 'prop', properties: ['getetag', 'calendar-data'] });
+    expect(CalDavUtil.parseDepth('1')).toBe(1);
+    expect(CalDavUtil.parseDepth('infinity')).toBe(0);
+    expect(CalDavUtil.parseDepth(null)).toBe(0);
   });
 
   it('returns current principal and calendar home discovery properties', async () => {
@@ -31,6 +58,31 @@ describe('CalDavUtil', () => {
     expect(response).toContain('<D:href>/dav/calendars/app-1/work%40example.com/</D:href>');
     expect(response).toContain('<D:resourcetype><D:collection/><C:calendar/></D:resourcetype>');
     expect(response).toContain('<D:supported-report-set><D:supported-report><D:report><C:calendar-query/></D:report></D:supported-report>');
+  });
+
+  it('returns object metadata for depth-one calendar PROPFIND', async () => {
+    const response = await CalDavUtil.propfindCalendar(
+      'app-1',
+      { id: 'cal-1', name: 'Calendar' },
+      CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>'),
+      1,
+      [
+        {
+          id: 'provider/id',
+          uid: 'event-1@example.com',
+          etag: 'etag-1',
+          summary: 'Planning',
+          start: { dateTime: '2026-05-21T10:00:00Z' },
+          end: { dateTime: '2026-05-21T11:00:00Z' },
+          updated: '2026-05-21T09:00:00Z',
+        },
+      ],
+    ).text();
+
+    expect(response).toContain('<D:href>/dav/calendars/app-1/cal-1/provider-id.ics</D:href>');
+    expect(response).toContain('<D:getetag>&quot;etag-1&quot;</D:getetag>');
+    expect(response).toContain('<D:getcontenttype>text/calendar; charset=utf-8</D:getcontenttype>');
+    expect(response).toContain('<D:getlastmodified>Thu, 21 May 2026 09:00:00 GMT</D:getlastmodified>');
   });
 
   it('reports unknown requested properties in a 404 propstat', async () => {
@@ -81,12 +133,53 @@ describe('CalDavUtil', () => {
     expect(response).toContain('SUMMARY:Planning');
   });
 
+  it('returns 404 responses for missing calendar-multiget objects', async () => {
+    const response = await CalDavUtil.calendarObjectReport('app-1', 'cal-1', [{ href: 'missing.ics', status: 404 }], ['getetag', 'calendar-data']).text();
+
+    expect(response).toContain('<D:href>/dav/calendars/app-1/cal-1/missing.ics</D:href>');
+    expect(response).toContain('<D:status>HTTP/1.1 404 Not Found</D:status>');
+  });
+
+  it('escapes iCalendar data safely when embedding it in DAV XML', async () => {
+    const response = await CalDavUtil.calendarObjectReport(
+      'app-1',
+      'cal-1',
+      [
+        {
+          href: 'event.ics',
+          event: {
+            uid: 'event-1@example.com',
+            summary: 'A & B < C',
+            description: '<html>\r\n<body>One; Two & Three</body>\r\n</html>',
+            start: { dateTime: '2026-05-21T10:00:00Z' },
+            end: { dateTime: '2026-05-21T11:00:00Z' },
+          },
+        },
+      ],
+      ['calendar-data'],
+    ).text();
+
+    expect(response).toContain('SUMMARY:A &amp; B &lt; C');
+    expect(response).toContain('DESCRIPTION:&lt;html&gt;\\n&lt;body&gt;One\\; Two &amp; Three&lt;/body&gt;\\n&lt;/html&gt;');
+  });
+
   it('matches conditional etag headers', () => {
     expect(CalDavUtil.etagMatches('"etag-1"', 'etag-1')).toBe(true);
     expect(CalDavUtil.etagMatches('"etag-1", "etag-2"', 'etag-2')).toBe(true);
     expect(CalDavUtil.etagMatches('"etag-1"', 'etag-2')).toBe(false);
     expect(CalDavUtil.etagMatches('*', 'etag-2')).toBe(true);
     expect(CalDavUtil.etagMatches('*')).toBe(false);
+  });
+
+  it('returns calendar and error response headers', async () => {
+    const calendar = CalDavUtil.textCalendarResponse('BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n', 'etag-1');
+    expect(calendar.headers.get('Content-Type')).toBe('text/calendar; charset=utf-8');
+    expect(calendar.headers.get('ETag')).toBe('"etag-1"');
+    expect(await calendar.text()).toBe('BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n');
+
+    const error = CalDavUtil.davError(405, 'Nope');
+    expect(error.headers.get('Allow')).toBe('OPTIONS, PROPFIND, REPORT, GET, HEAD, PUT, DELETE');
+    expect(await error.text()).toContain('<D:responsedescription>Nope</D:responsedescription>');
   });
 
   it('returns a Basic challenge for DAV auth errors', () => {

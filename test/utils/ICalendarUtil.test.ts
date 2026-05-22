@@ -80,6 +80,44 @@ describe('ICalendarUtil', () => {
     });
   });
 
+  it('preserves TZID local event times without converting them to UTC', () => {
+    const parsed = ICalendarUtil.fromICS(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'UID:event-1@example.test',
+        'DTSTART;TZID=America/Chicago:20260522T100000',
+        'DTEND;TZID=America/Chicago:20260522T110000',
+        'END:VEVENT',
+        'END:VCALENDAR',
+        '',
+      ].join('\r\n'),
+      'fallback',
+    );
+
+    expect(parsed.start).toEqual({ dateTime: '2026-05-22T10:00:00', timeZone: 'America/Chicago' });
+    expect(parsed.end).toEqual({ dateTime: '2026-05-22T11:00:00', timeZone: 'America/Chicago' });
+  });
+
+  it('keeps floating event times as floating times', () => {
+    const parsed = ICalendarUtil.fromICS(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'UID:event-1@example.test',
+        'DTSTART:20260522T100000',
+        'DTEND:20260522T110000',
+        'END:VEVENT',
+        'END:VCALENDAR',
+        '',
+      ].join('\r\n'),
+      'fallback',
+    );
+
+    expect(parsed.start).toEqual({ dateTime: '2026-05-22T10:00:00' });
+    expect(parsed.end).toEqual({ dateTime: '2026-05-22T11:00:00' });
+  });
+
   it('emits and parses recurrence rules', () => {
     const ics = ICalendarUtil.toICS({
       uid: 'event-1@example.test',

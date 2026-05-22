@@ -59,6 +59,7 @@ class ICalendarUtil {
 
   private static dateLine(name: string, value: CalendarEvent['start']): string {
     if (value.date) return `${name};VALUE=DATE:${value.date.replace(/-/g, '')}`;
+    if (value.timeZone && value.timeZone !== 'UTC') return `${name};TZID=${ICalendarUtil.escapeParamValue(value.timeZone)}:${ICalendarUtil.toLocalStamp(value.dateTime || new Date().toISOString())}`;
     return `${name}:${ICalendarUtil.toUtcStamp(value.dateTime || new Date().toISOString())}`;
   }
 
@@ -67,7 +68,10 @@ class ICalendarUtil {
     if (!line) return { dateTime: new Date().toISOString(), timeZone: 'UTC' };
     const value = line.slice(line.indexOf(':') + 1);
     if (/VALUE=DATE/i.test(line)) return { date: `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}` };
-    return { dateTime: ICalendarUtil.fromUtcStamp(value), timeZone: 'UTC' };
+    const timeZone = ICalendarUtil.getParameter(line, 'TZID');
+    if (/Z$/i.test(value)) return { dateTime: ICalendarUtil.fromUtcStamp(value), timeZone: 'UTC' };
+    const dateTime = ICalendarUtil.fromLocalStamp(value);
+    return timeZone ? { dateTime, timeZone } : { dateTime };
   }
 
   private static toUtcStamp(value: string): string {
@@ -77,6 +81,22 @@ class ICalendarUtil {
   private static fromUtcStamp(value: string): string {
     const match = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/.exec(value);
     return match ? `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}Z` : value;
+  }
+
+  private static toLocalStamp(value: string): string {
+    return value.replace(/[-:]/g, '').replace(/(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/, '');
+  }
+
+  private static fromLocalStamp(value: string): string {
+    const match = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/.exec(value);
+    return match ? `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}` : value;
+  }
+
+  private static getParameter(line: string, name: string): string | undefined {
+    const parameters = line.slice(0, line.indexOf(':')).split(';').slice(1);
+    const parameter = parameters.find((item) => item.toUpperCase().startsWith(`${name.toUpperCase()}=`));
+    const value = parameter?.slice(parameter.indexOf('=') + 1);
+    return value?.replace(/^"|"$/g, '');
   }
 
   private static escape(value: string): string {
@@ -89,6 +109,10 @@ class ICalendarUtil {
 
   private static escapeParam(value: string): string {
     return `"${value.replace(/\^/g, '^^').replace(/\r\n|\r|\n/g, '^n').replace(/"/g, "^'")}"`;
+  }
+
+  private static escapeParamValue(value: string): string {
+    return value.replace(/[,;:]/g, '\\$&');
   }
 
   private static foldLines(lines: string[]): string[] {

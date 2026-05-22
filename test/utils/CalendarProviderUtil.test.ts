@@ -245,6 +245,25 @@ describe('CalendarProviderUtil', () => {
     });
   });
 
+  it('sends Microsoft Graph local times with Outlook-compatible time zones', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ id: 'graph-id', iCalUId: 'graph-uid', start: { dateTime: '2026-05-22T10:00:00', timeZone: 'Central Standard Time' }, end: { dateTime: '2026-05-22T11:00:00', timeZone: 'Central Standard Time' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await CalendarProviderUtil.upsertEvent(
+      PROVIDER_MICROSOFT_OUTLOOK_CALENDAR,
+      'token',
+      'calendar-id',
+      { uid: 'uid', summary: 'Graph', start: { dateTime: '2026-05-22T10:00:00', timeZone: 'America/Chicago' }, end: { dateTime: '2026-05-22T11:00:00', timeZone: 'America/Chicago' } },
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toMatchObject({
+      start: { dateTime: '2026-05-22T10:00:00', timeZone: 'Central Standard Time' },
+      end: { dateTime: '2026-05-22T11:00:00', timeZone: 'Central Standard Time' },
+    });
+  });
+
   it('ignores missing provider deletes and fails other delete errors', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

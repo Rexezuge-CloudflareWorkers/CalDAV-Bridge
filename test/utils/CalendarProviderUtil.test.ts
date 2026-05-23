@@ -84,6 +84,8 @@ describe('CalendarProviderUtil', () => {
     expect(events.map((event) => event.id)).toEqual(['one', 'two']);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]?.[0]).toBe('https://graph.microsoft.com/next');
+    expect(preferHeader(fetchMock, 0)).toBe('outlook.body-content-type="text"');
+    expect(preferHeader(fetchMock, 1)).toBe('outlook.body-content-type="text"');
   });
 
   it('uses Microsoft events for time-range event queries so recurring masters can include overrides', async () => {
@@ -98,6 +100,7 @@ describe('CalendarProviderUtil', () => {
     const url = new URL(fetchMock.mock.calls[0]?.[0] as string);
     expect(url.pathname).toBe('/v1.0/me/calendars/calendar-id/events');
     expect(url.searchParams.get('$top')).toBe('250');
+    expect(preferHeader(fetchMock, 0)).toBe('outlook.body-content-type="text"');
   });
 
   it('maps Microsoft events including HTML descriptions and attendees', async () => {
@@ -135,6 +138,68 @@ describe('CalendarProviderUtil', () => {
       status: 'cancelled',
       attendees: [{ email: 'one@example.test', name: 'One' }],
     });
+  });
+
+  it('maps Microsoft text descriptions without HTML wrappers', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        value: [
+          {
+            id: 'event-id',
+            subject: 'Subject',
+            body: { contentType: 'text', content: 'Close Helium Mobile' },
+            start: { dateTime: '2026-05-04T10:00:00.0000000', timeZone: 'UTC' },
+            end: { dateTime: '2026-05-04T10:30:00.0000000', timeZone: 'UTC' },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
+
+    expect(events[0]?.description).toBe('Close Helium Mobile');
+  });
+
+  it('unwraps nested Microsoft Exchange plain text HTML descriptions', async () => {
+    const innerExchangeHtml = [
+      '<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">',
+      '<meta name="Generator" content="Microsoft Exchange Server">',
+      '<!-- converted from text -->',
+      '<style><!-- .EmailQuote { margin-left: 1pt; padding-left: 4pt; border-left: #800000 2px solid; } --></style></head>',
+      '<body>',
+      '<font size="2"><span style="font-size:11pt;"><div class="PlainText">Close Helium Mobile</div></span></font>',
+      '</body>',
+      '</html>',
+    ].join('\n');
+    const outerExchangeHtml = [
+      '<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">',
+      '<meta name="Generator" content="Microsoft Exchange Server">',
+      '<!-- converted from text -->',
+      '<style><!-- .EmailQuote { margin-left: 1pt; padding-left: 4pt; border-left: #800000 2px solid; } --></style></head>',
+      '<body>',
+      `<font size="2"><span style="font-size:11pt;"><div class="PlainText">${escapeHtml(innerExchangeHtml).replace(/\n/g, '<br>\n')}</div></span></font>`,
+      '</body>',
+      '</html>',
+    ].join('\n');
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        value: [
+          {
+            id: 'event-id',
+            subject: 'Subject',
+            body: { contentType: 'html', content: outerExchangeHtml },
+            start: { dateTime: '2026-05-04T10:00:00.0000000', timeZone: 'UTC' },
+            end: { dateTime: '2026-05-04T10:30:00.0000000', timeZone: 'UTC' },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
+
+    expect(events[0]?.description).toBe('Close Helium Mobile');
   });
 
   it('maps Microsoft weekly recurrence to iCalendar RRULE', async () => {
@@ -243,6 +308,7 @@ describe('CalendarProviderUtil', () => {
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]?.[0]).toContain('/events/series-master/instances?');
+    expect(preferHeader(fetchMock, 1)).toBe('outlook.body-content-type="text"');
   });
 
   it('retries short Microsoft Graph throttles', async () => {
@@ -350,9 +416,18 @@ describe('CalendarProviderUtil', () => {
     const promise = CalendarProviderUtil.getEvent(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id', 'event-id');
     await expect(promise).rejects.toBeInstanceOf(HttpError);
     await expect(promise).rejects.toMatchObject({ status: 404 });
+    expect(preferHeader(fetchMock, 0)).toBe('outlook.body-content-type="text"');
   });
 });
 
 function jsonResponse(value: unknown, status = 200, headers: HeadersInit = {}): Response {
   return new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json', ...headers } });
+}
+
+function preferHeader(fetchMock: ReturnType<typeof vi.fn<typeof fetch>>, callIndex: number): string | null {
+  return new Headers(fetchMock.mock.calls[callIndex]?.[1]?.headers).get('Prefer');
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

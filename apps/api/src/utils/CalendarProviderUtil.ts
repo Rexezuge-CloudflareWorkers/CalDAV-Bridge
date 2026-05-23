@@ -6,6 +6,7 @@ import { HttpError } from './HttpError';
 class CalendarProviderUtil {
   private static readonly maxThrottleRetryAttempts = 2;
   private static readonly maxRetryAfterSeconds = 2;
+  private static readonly graphTextBodyRequest: RequestInit = { headers: { Prefer: 'outlook.body-content-type="text"' } };
 
   public static async getProfile(providerId: ProviderId | string, accessToken: string): Promise<{ emailAddress: string }> {
     if (providerId === PROVIDER_GOOGLE_CALENDAR) {
@@ -58,7 +59,7 @@ class CalendarProviderUtil {
       return events.map(CalendarProviderUtil.fromGoogleEvent).filter((event) => CalendarProviderUtil.eventOverlapsRange(event, range));
     }
     const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`;
-    const events = await CalendarProviderUtil.fetchGraphPages<GraphEvent>(url, accessToken);
+    const events = await CalendarProviderUtil.fetchGraphPages<GraphEvent>(url, accessToken, CalendarProviderUtil.graphTextBodyRequest);
     const mappedEvents = events.map(CalendarProviderUtil.fromGraphEvent);
     const recurringEventIdsInRange = range.start && range.end
       ? await CalendarProviderUtil.addGraphRecurrenceOverrides(accessToken, calendarId, events, mappedEvents, { start: range.start, end: range.end })
@@ -70,7 +71,7 @@ class CalendarProviderUtil {
     if (providerId === PROVIDER_GOOGLE_CALENDAR) {
       return CalendarProviderUtil.fromGoogleEvent(await CalendarProviderUtil.fetchJson<GoogleEvent>(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, accessToken));
     }
-    return CalendarProviderUtil.fromGraphEvent(await CalendarProviderUtil.fetchJson<GraphEvent>(`https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, accessToken));
+    return CalendarProviderUtil.fromGraphEvent(await CalendarProviderUtil.fetchJson<GraphEvent>(`https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, accessToken, CalendarProviderUtil.graphTextBodyRequest));
   }
 
   public static async upsertEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, event: CalendarEvent, providerEventId?: string): Promise<CalendarEvent> {
@@ -147,11 +148,11 @@ class CalendarProviderUtil {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
-  private static async fetchGraphPages<T>(url: string, accessToken: string): Promise<T[]> {
+  private static async fetchGraphPages<T>(url: string, accessToken: string, init: RequestInit = {}): Promise<T[]> {
     const items: T[] = [];
     let nextUrl: string | undefined = url;
     while (nextUrl) {
-      const data: { value?: T[]; '@odata.nextLink'?: string } = await CalendarProviderUtil.fetchJson(nextUrl, accessToken);
+      const data: { value?: T[]; '@odata.nextLink'?: string } = await CalendarProviderUtil.fetchJson(nextUrl, accessToken, init);
       items.push(...(data.value || []));
       nextUrl = data['@odata.nextLink'];
     }
@@ -168,7 +169,7 @@ class CalendarProviderUtil {
           const event = byId.get(master.id);
           if (!event) return;
           const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(master.id || '')}/instances?startDateTime=${encodeURIComponent(range.start)}&endDateTime=${encodeURIComponent(range.end)}&$top=250`;
-          const instances = await CalendarProviderUtil.fetchGraphPages<GraphEvent>(url, accessToken);
+          const instances = await CalendarProviderUtil.fetchGraphPages<GraphEvent>(url, accessToken, CalendarProviderUtil.graphTextBodyRequest);
           if (instances.length) recurringEventIdsInRange.add(master.id || '');
           const overrides = instances
             .filter((instance) => instance.type === 'exception' && instance.originalStart)
@@ -238,7 +239,7 @@ class CalendarProviderUtil {
       etag: event.changeKey || event['@odata.etag'],
       recurrenceId: event.originalStart ? { dateTime: event.originalStart, timeZone: 'UTC' } : undefined,
       summary: event.subject,
-      description: event.body?.content,
+      description: CalendarProviderUtil.fromGraphDescription(event.body),
       location: event.location?.displayName,
       status: event.isCancelled ? 'cancelled' : 'confirmed',
       start: { dateTime: event.start?.dateTime, timeZone: event.start?.timeZone },
@@ -276,6 +277,40 @@ class CalendarProviderUtil {
     if (range?.type === 'endDate' && range.endDate) parts.push(`UNTIL=${CalendarProviderUtil.endDateToUtcStamp(range.endDate)}`);
 
     return [`RRULE:${parts.join(';')}`];
+  }
+
+  private static fromGraphDescription(body?: GraphEvent['body'] | undefined): string | undefined {
+    if (body?.content === undefined) return undefined;
+    if (body.contentType?.toLowerCase() !== 'html') return body.content;
+    return CalendarProviderUtil.unwrapExchangePlainTextHtml(body.content) ?? body.content;
+  }
+
+  private static unwrapExchangePlainTextHtml(content: string, depth = 0): string | undefined {
+    if (depth > 4 || !/converted from text|\bPlainText\b/i.test(content)) return undefined;
+    const plainText = CalendarProviderUtil.extractPlainTextDiv(content);
+    if (plainText === undefined) return undefined;
+    const decoded = CalendarProviderUtil.decodeHtmlEntities(
+      plainText
+        .replace(/<br\s*\/?\s*>/gi, '\n')
+        .replace(/<\/(?:div|p)>/gi, '\n')
+        .replace(/<[^>]+>/g, ''),
+    )
+      .replace(/\r\n?/g, '\n')
+      .trim();
+    return CalendarProviderUtil.unwrapExchangePlainTextHtml(decoded, depth + 1) ?? decoded;
+  }
+
+  private static extractPlainTextDiv(content: string): string | undefined {
+    return /<div\b(?=[^>]*\bPlainText\b)[^>]*>([\s\S]*?)<\/div>/i.exec(content)?.[1];
+  }
+
+  private static decodeHtmlEntities(value: string): string {
+    const namedEntities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+    return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, name: string) => {
+      if (name.startsWith('#x')) return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
+      if (name.startsWith('#')) return String.fromCodePoint(Number.parseInt(name.slice(1), 10));
+      return namedEntities[name.toLowerCase()] ?? entity;
+    });
   }
 
   private static graphFrequency(type: string): string | undefined {

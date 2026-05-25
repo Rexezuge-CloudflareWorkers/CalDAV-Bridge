@@ -39,6 +39,7 @@ interface DavPropertyContext {
   applicationId: string;
   calendar?: ProviderCalendar | undefined;
   calendarId?: string | undefined;
+  collectionTag?: string | undefined;
   event?: CalendarEvent | undefined;
   objectHref?: string | undefined;
 }
@@ -125,7 +126,14 @@ class CalDavUtil {
   }
 
   public static propfindCalendar(applicationId: string, calendar: ProviderCalendar, request: DavPropfindRequest, depth: number, objects: DavCalendarObjectResult[] = []): Response {
-    const responses = [CalDavUtil.resourceResponse(CalDavUtil.calendarHref(applicationId, calendar.id), request, 'calendar', { applicationId, calendar, calendarId: calendar.id })];
+    const responses = [
+      CalDavUtil.resourceResponse(CalDavUtil.calendarHref(applicationId, calendar.id), request, 'calendar', {
+        applicationId,
+        calendar,
+        calendarId: calendar.id,
+        collectionTag: CalDavUtil.collectionTag(applicationId, calendar, objects),
+      }),
+    ];
     if (depth > 0) {
       responses.push(
         ...objects
@@ -338,7 +346,7 @@ class CalDavUtil {
       case 'max-resource-size':
         return '<C:max-resource-size>10485760</C:max-resource-size>';
       case 'getctag':
-        return calendar ? `<CS:getctag>${CalDavUtil.escape(`${applicationId}:${calendar.id}:${calendar.etag || calendar.name}`)}</CS:getctag>` : undefined;
+        return context.collectionTag ? `<CS:getctag>${CalDavUtil.escape(context.collectionTag)}</CS:getctag>` : undefined;
       case 'current-user-privilege-set':
         return CalDavUtil.privileges(calendar?.readOnly === true);
       case 'supported-report-set':
@@ -364,6 +372,16 @@ class CalDavUtil {
       ? ''
       : '<D:privilege><D:write/></D:privilege><D:privilege><D:write-content/></D:privilege><D:privilege><D:write-properties/></D:privilege><D:privilege><D:bind/></D:privilege><D:privilege><D:unbind/></D:privilege>';
     return `<D:current-user-privilege-set><D:privilege><D:read/></D:privilege>${writePrivileges}</D:current-user-privilege-set>`;
+  }
+
+  private static collectionTag(applicationId: string, calendar: ProviderCalendar, objects: DavCalendarObjectResult[]): string {
+    const calendarTag = calendar.etag || calendar.name;
+    const objectTags = objects
+      .filter((object): object is DavCalendarObjectResult & { event: CalendarEvent } => Boolean(object.event))
+      .map((object) => `${object.href}:${object.event.etag || object.event.updated || object.event.uid}`)
+      .sort()
+      .join('|');
+    return `${applicationId}:${calendar.id}:${objectTags ? `${calendarTag}:${objectTags}` : calendarTag}`;
   }
 
   private static emptyProperty(property: string): string {

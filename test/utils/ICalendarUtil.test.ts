@@ -173,6 +173,73 @@ describe('ICalendarUtil', () => {
     expect(unfolded).toContain('END:VALARM');
   });
 
+  it('parses display alarms from CalDAV writes without using alarm text as event description', () => {
+    const parsed = ICalendarUtil.fromICS(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'UID:event-1@example.test',
+        'SUMMARY:Planning',
+        'DTSTART:20260504T100000Z',
+        'DTEND:20260504T103000Z',
+        'BEGIN:VALARM',
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Local reminder',
+        'TRIGGER;RELATED=START:-PT1H30M',
+        'END:VALARM',
+        'END:VEVENT',
+        'END:VCALENDAR',
+        '',
+      ].join('\r\n'),
+      'fallback',
+    );
+
+    expect(parsed.description).toBeUndefined();
+    expect(parsed.alarms).toEqual([{ triggerMinutesBeforeStart: 90, description: 'Local reminder' }]);
+  });
+
+  it('round trips event reminders through iCalendar parsing', () => {
+    const parsed = ICalendarUtil.fromICS(
+      ICalendarUtil.toICS({
+        uid: 'event-1@example.test',
+        summary: 'Planning',
+        start: { dateTime: '2026-05-04T10:00:00Z' },
+        end: { dateTime: '2026-05-04T10:30:00Z' },
+        alarms: [{ triggerMinutesBeforeStart: 15, description: 'Custom reminder' }],
+      }),
+      'fallback',
+    );
+
+    expect(parsed.alarms).toEqual([{ triggerMinutesBeforeStart: 15, description: 'Custom reminder' }]);
+  });
+
+  it('ignores alarm triggers that cannot map to minutes before start', () => {
+    const parsed = ICalendarUtil.fromICS(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'UID:event-1@example.test',
+        'DTSTART:20260504T100000Z',
+        'DTEND:20260504T103000Z',
+        'BEGIN:VALARM',
+        'TRIGGER;VALUE=DATE-TIME:20260504T094500Z',
+        'END:VALARM',
+        'BEGIN:VALARM',
+        'TRIGGER;RELATED=END:-PT5M',
+        'END:VALARM',
+        'BEGIN:VALARM',
+        'TRIGGER:PT5M',
+        'END:VALARM',
+        'END:VEVENT',
+        'END:VCALENDAR',
+        '',
+      ].join('\r\n'),
+      'fallback',
+    );
+
+    expect(parsed.alarms).toBeUndefined();
+  });
+
   it('quotes attendee CN parameters with iCalendar-safe escaping', () => {
     const ics = ICalendarUtil.toICS({
       uid: 'event-1@example.test',

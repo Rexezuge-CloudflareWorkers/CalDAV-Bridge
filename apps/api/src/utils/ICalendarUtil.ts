@@ -31,8 +31,24 @@ class ICalendarUtil {
       ICalendarUtil.dateLine('DTEND', event.end),
       ...(!isOverride ? event.recurrence || [] : []),
       ...(event.attendees || []).map((attendee) => `ATTENDEE;CN=${ICalendarUtil.escapeParam(attendee.name || attendee.email)}:mailto:${attendee.email}`),
+      ...(event.alarms || []).flatMap((alarm) => ICalendarUtil.alarmLines(alarm, event.summary)),
       'END:VEVENT',
     ];
+  }
+
+  private static alarmLines(alarm: NonNullable<CalendarEvent['alarms']>[number], eventSummary?: string | undefined): string[] {
+    return [
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${ICalendarUtil.escape(alarm.description || eventSummary || 'Reminder')}`,
+      `TRIGGER:${ICalendarUtil.alarmTrigger(alarm.triggerMinutesBeforeStart)}`,
+      'END:VALARM',
+    ];
+  }
+
+  private static alarmTrigger(minutesBeforeStart: number): string {
+    const minutes = Math.max(0, Math.trunc(minutesBeforeStart));
+    return minutes === 0 ? 'PT0M' : `-PT${minutes}M`;
   }
 
   public static fromICS(ics: string, fallbackUid: string): CalendarEvent {

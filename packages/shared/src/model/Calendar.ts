@@ -50,6 +50,8 @@ interface CalendarObjectMappingInternal {
   provider_event_id: string;
   uid: string;
   etag: string | null;
+  deleted_at?: number | null;
+  sync_version?: number | null;
   created_at: number;
   updated_at: number;
 }

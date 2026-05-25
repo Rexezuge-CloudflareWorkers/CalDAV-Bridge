@@ -308,7 +308,9 @@ class CalDavBridgeWorker {
     }
     if (path.resource === 'calendar' && path.calendarId) {
       const calendar = await this.requireCalendar(application, accessToken, path.calendarId);
-      const events = depth > 0 ? await CalendarProviderUtil.listEvents(application.providerId, accessToken, path.calendarId) : [];
+      const events = depth > 0 || this.propfindNeedsCalendarObjects(propfind)
+        ? await CalendarProviderUtil.listEvents(application.providerId, accessToken, path.calendarId)
+        : [];
       const objects = events.length
         ? await this.upsertMappings(new CalendarObjectMappingDAO(env.DB), application.applicationId, path.calendarId, events)
         : [];
@@ -409,6 +411,10 @@ class CalDavBridgeWorker {
           .then((mapping) => ({ href: mapping.href, event })),
       ),
     );
+  }
+
+  private propfindNeedsCalendarObjects(propfind: ReturnType<typeof CalDavUtil.parsePropfind>): boolean {
+    return propfind.mode === 'allprop' || (propfind.mode === 'prop' && propfind.properties.includes('getctag'));
   }
 
   private async authenticateDav(request: Request, env: Env, applicationId?: string | undefined): Promise<ConnectedApplication> {

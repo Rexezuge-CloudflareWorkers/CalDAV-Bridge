@@ -88,6 +88,48 @@ describe('CalDavUtil', () => {
     expect(response).toContain('<D:getlastmodified>Thu, 21 May 2026 09:00:00 GMT</D:getlastmodified>');
   });
 
+  it('derives calendar getctag from object tags when available', async () => {
+    const request = CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"><D:prop><CS:getctag/></D:prop></D:propfind>');
+    const first = await CalDavUtil.propfindCalendar('app-1', { id: 'cal-1', name: 'Calendar', etag: 'calendar-etag' }, request, 0, [
+      {
+        href: 'event-1.ics',
+        event: {
+          id: 'event-1',
+          uid: 'event-1@example.com',
+          etag: 'etag-1',
+          start: { dateTime: '2026-05-21T10:00:00Z' },
+          end: { dateTime: '2026-05-21T11:00:00Z' },
+        },
+      },
+    ]).text();
+    const second = await CalDavUtil.propfindCalendar('app-1', { id: 'cal-1', name: 'Calendar', etag: 'calendar-etag' }, request, 0, [
+      {
+        href: 'event-1.ics',
+        event: {
+          id: 'event-1',
+          uid: 'event-1@example.com',
+          etag: 'etag-1',
+          start: { dateTime: '2026-05-21T10:00:00Z' },
+          end: { dateTime: '2026-05-21T11:00:00Z' },
+        },
+      },
+      {
+        href: 'event-2.ics',
+        event: {
+          id: 'event-2',
+          uid: 'event-2@example.com',
+          etag: 'etag-2',
+          start: { dateTime: '2026-05-22T10:00:00Z' },
+          end: { dateTime: '2026-05-22T11:00:00Z' },
+        },
+      },
+    ]).text();
+
+    expect(first).toContain('<CS:getctag>app-1:cal-1:calendar-etag:event-1.ics:etag-1</CS:getctag>');
+    expect(second).toContain('event-2.ics:etag-2');
+    expect(second).not.toBe(first);
+  });
+
   it('reports unknown requested properties in a 404 propstat', async () => {
     const response = await CalDavUtil.propfindCalendar(
       'app-1',

@@ -120,6 +120,8 @@ describe('CalendarProviderUtil', () => {
             createdDateTime: '2026-05-01T00:00:00Z',
             lastModifiedDateTime: '2026-05-02T00:00:00Z',
             attendees: [{ emailAddress: { address: 'one@example.test', name: 'One' } }, { emailAddress: { address: '' } }],
+            isReminderOn: true,
+            reminderMinutesBeforeStart: 15,
           },
         ],
       }),
@@ -137,6 +139,7 @@ describe('CalendarProviderUtil', () => {
       location: 'Room',
       status: 'cancelled',
       attendees: [{ email: 'one@example.test', name: 'One' }],
+      alarms: [{ triggerMinutesBeforeStart: 15, description: 'Subject' }],
     });
   });
 

@@ -248,7 +248,14 @@ class CalendarProviderUtil {
       updated: event.lastModifiedDateTime,
       recurrence: CalendarProviderUtil.fromGraphRecurrence(event.recurrence),
       attendees: event.attendees?.map((attendee) => ({ email: attendee.emailAddress?.address || '', name: attendee.emailAddress?.name })).filter((attendee) => attendee.email),
+      alarms: CalendarProviderUtil.fromGraphReminder(event),
     };
+  }
+
+  private static fromGraphReminder(event: GraphEvent): CalendarEvent['alarms'] {
+    const minutes = event.reminderMinutesBeforeStart;
+    if (!event.isReminderOn || typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes < 0) return undefined;
+    return [{ triggerMinutesBeforeStart: Math.trunc(minutes), description: event.subject || undefined }];
   }
 
   private static fromGraphRecurrence(recurrence?: GraphPatternedRecurrence | null | undefined): string[] | undefined {
@@ -444,7 +451,7 @@ interface CalendarEventRange { start?: string | undefined; end?: string | undefi
 interface GoogleCalendar { id: string; summary?: string; description?: string; timeZone?: string; accessRole?: string; etag?: string }
 interface GoogleEvent { id?: string; iCalUID?: string; etag?: string; summary?: string; description?: string; location?: string; status?: string; start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string }; created?: string; updated?: string; recurrence?: string[]; attendees?: Array<{ email: string; displayName?: string }> }
 interface GraphCalendar { id: string; name?: string; canEdit?: boolean; changeKey?: string }
-interface GraphEvent { id?: string; iCalUId?: string; changeKey?: string; '@odata.etag'?: string; subject?: string; body?: { content?: string; contentType?: string }; location?: { displayName?: string }; isCancelled?: boolean; start?: GraphDateTimeTimeZone; end?: GraphDateTimeTimeZone; createdDateTime?: string; lastModifiedDateTime?: string; originalStart?: string; recurrence?: GraphPatternedRecurrence | null; attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }>; type?: string; seriesMasterId?: string }
+interface GraphEvent { id?: string; iCalUId?: string; changeKey?: string; '@odata.etag'?: string; subject?: string; body?: { content?: string; contentType?: string }; location?: { displayName?: string }; isCancelled?: boolean; start?: GraphDateTimeTimeZone; end?: GraphDateTimeTimeZone; createdDateTime?: string; lastModifiedDateTime?: string; originalStart?: string; recurrence?: GraphPatternedRecurrence | null; attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }>; isReminderOn?: boolean; reminderMinutesBeforeStart?: number | null; type?: string; seriesMasterId?: string }
 interface GraphDateTimeTimeZone { dateTime?: string; timeZone?: string }
 interface GraphPatternedRecurrence { pattern?: GraphRecurrencePattern | undefined; range?: GraphRecurrenceRange | undefined }
 interface GraphRecurrencePattern { type?: string | undefined; interval?: number | undefined; daysOfWeek?: string[] | undefined; firstDayOfWeek?: string | undefined; index?: string | undefined; dayOfMonth?: number | undefined; month?: number | undefined }

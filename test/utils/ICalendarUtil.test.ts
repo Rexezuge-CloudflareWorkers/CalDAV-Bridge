@@ -156,6 +156,23 @@ describe('ICalendarUtil', () => {
     expect(unfolded).toContain('SUMMARY:Moved sync');
   });
 
+  it('emits display alarms for event reminders', () => {
+    const ics = ICalendarUtil.toICS({
+      uid: 'event-1@example.test',
+      summary: 'Planning',
+      start: { dateTime: '2026-05-04T10:00:00Z' },
+      end: { dateTime: '2026-05-04T10:30:00Z' },
+      alarms: [{ triggerMinutesBeforeStart: 15 }],
+    });
+    const unfolded = unfold(ics);
+
+    expect(unfolded).toContain('BEGIN:VALARM');
+    expect(unfolded).toContain('ACTION:DISPLAY');
+    expect(unfolded).toContain('DESCRIPTION:Planning');
+    expect(unfolded).toContain('TRIGGER:-PT15M');
+    expect(unfolded).toContain('END:VALARM');
+  });
+
   it('quotes attendee CN parameters with iCalendar-safe escaping', () => {
     const ics = ICalendarUtil.toICS({
       uid: 'event-1@example.test',

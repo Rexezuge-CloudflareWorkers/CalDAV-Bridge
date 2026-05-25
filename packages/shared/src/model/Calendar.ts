@@ -18,6 +18,11 @@ interface CalendarAttendee {
   name?: string | undefined;
 }
 
+interface CalendarEventAlarm {
+  triggerMinutesBeforeStart: number;
+  description?: string | undefined;
+}
+
 interface CalendarEvent {
   id?: string | undefined;
   uid: string;
@@ -33,6 +38,7 @@ interface CalendarEvent {
   updated?: string | undefined;
   recurrence?: string[] | undefined;
   attendees?: CalendarAttendee[] | undefined;
+  alarms?: CalendarEventAlarm[] | undefined;
   overrides?: CalendarEvent[] | undefined;
 }
 
@@ -48,4 +54,4 @@ interface CalendarObjectMappingInternal {
   updated_at: number;
 }
 
-export type { CalendarAttendee, CalendarEvent, CalendarEventDateTime, CalendarObjectMappingInternal, ProviderCalendar };
+export type { CalendarAttendee, CalendarEvent, CalendarEventAlarm, CalendarEventDateTime, CalendarObjectMappingInternal, ProviderCalendar };

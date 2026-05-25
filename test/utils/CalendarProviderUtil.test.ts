@@ -371,6 +371,66 @@ describe('CalendarProviderUtil', () => {
     });
   });
 
+  it('sends Google default reminders: { useDefault: false } when event has no alarms', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ id: 'google-id', iCalUID: 'google-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await CalendarProviderUtil.upsertEvent(
+      PROVIDER_GOOGLE_CALENDAR,
+      'token',
+      'calendar-id',
+      { uid: 'uid', summary: 'No alarm', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } },
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string).reminders).toEqual({ useDefault: false });
+  });
+
+  it('sends Google reminders as overrides when event has alarms', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ id: 'google-id', iCalUID: 'google-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await CalendarProviderUtil.upsertEvent(
+      PROVIDER_GOOGLE_CALENDAR,
+      'token',
+      'calendar-id',
+      { uid: 'uid', summary: 'Alarm', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' }, alarms: [{ triggerMinutesBeforeStart: 10 }] },
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string).reminders).toEqual({ useDefault: false, overrides: [{ method: 'popup', minutes: 10 }] });
+  });
+
+  it('sends Graph isReminderOn: false when event has no alarms', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ id: 'graph-id', iCalUId: 'graph-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await CalendarProviderUtil.upsertEvent(
+      PROVIDER_MICROSOFT_OUTLOOK_CALENDAR,
+      'token',
+      'calendar-id',
+      { uid: 'uid', summary: 'No alarm', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } },
+    );
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(body.isReminderOn).toBe(false);
+    expect(body.reminderMinutesBeforeStart).toBeUndefined();
+  });
+
+  it('sends Graph isReminderOn: true with minutes when event has alarms', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ id: 'graph-id', iCalUId: 'graph-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await CalendarProviderUtil.upsertEvent(
+      PROVIDER_MICROSOFT_OUTLOOK_CALENDAR,
+      'token',
+      'calendar-id',
+      { uid: 'uid', summary: 'Alarm', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' }, alarms: [{ triggerMinutesBeforeStart: 15 }] },
+    );
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(body.isReminderOn).toBe(true);
+    expect(body.reminderMinutesBeforeStart).toBe(15);
+  });
+
   it('sends Microsoft Graph local times with Outlook-compatible time zones', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

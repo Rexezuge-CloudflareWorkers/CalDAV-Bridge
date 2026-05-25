@@ -193,6 +193,11 @@ class CalendarProviderUtil {
     }
   }
 
+  private static toGoogleReminders(alarms?: CalendarEvent['alarms']): { useDefault: boolean; overrides?: Array<{ method: 'popup'; minutes: number }> } {
+    if (!alarms?.length) return { useDefault: false };
+    return { useDefault: false, overrides: alarms.map((alarm) => ({ method: 'popup' as const, minutes: Math.max(0, Math.trunc(alarm.triggerMinutesBeforeStart)) })) };
+  }
+
   private static eventOverlapsRange(event: CalendarEvent, range: CalendarEventRange): boolean {
     if (!range.start && !range.end) return true;
     const eventStart = CalendarProviderUtil.toTime(event.start.dateTime || event.start.date);
@@ -229,7 +234,16 @@ class CalendarProviderUtil {
   }
 
   private static toGoogleEvent(event: CalendarEvent): Partial<GoogleEvent> {
-    return { summary: event.summary, description: event.description, location: event.location, status: event.status, start: event.start, end: event.end, recurrence: event.recurrence };
+    return {
+      summary: event.summary,
+      description: event.description,
+      location: event.location,
+      status: event.status,
+      start: event.start,
+      end: event.end,
+      recurrence: event.recurrence,
+      reminders: CalendarProviderUtil.toGoogleReminders(event.alarms),
+    };
   }
 
   private static fromGraphEvent(event: GraphEvent): CalendarEvent {
@@ -401,6 +415,8 @@ class CalendarProviderUtil {
       start: CalendarProviderUtil.toGraphDateTime(event.start),
       end: CalendarProviderUtil.toGraphDateTime(event.end),
       attendees: event.attendees?.map((attendee) => ({ emailAddress: { address: attendee.email, name: attendee.name }, type: 'required' })),
+      isReminderOn: event.alarms ? event.alarms.length > 0 : false,
+      reminderMinutesBeforeStart: event.alarms?.[0]?.triggerMinutesBeforeStart ?? undefined,
     };
   }
 
@@ -449,7 +465,7 @@ class CalendarProviderUtil {
 
 interface CalendarEventRange { start?: string | undefined; end?: string | undefined }
 interface GoogleCalendar { id: string; summary?: string; description?: string; timeZone?: string; accessRole?: string; etag?: string }
-interface GoogleEvent { id?: string; iCalUID?: string; etag?: string; summary?: string; description?: string; location?: string; status?: string; start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string }; created?: string; updated?: string; recurrence?: string[]; attendees?: Array<{ email: string; displayName?: string }> }
+interface GoogleEvent { id?: string; iCalUID?: string; etag?: string; summary?: string; description?: string; location?: string; status?: string; start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string }; created?: string; updated?: string; recurrence?: string[]; attendees?: Array<{ email: string; displayName?: string }>; reminders?: { useDefault: boolean; overrides?: Array<{ method: 'popup'; minutes: number }> } }
 interface GraphCalendar { id: string; name?: string; canEdit?: boolean; changeKey?: string }
 interface GraphEvent { id?: string; iCalUId?: string; changeKey?: string; '@odata.etag'?: string; subject?: string; body?: { content?: string; contentType?: string }; location?: { displayName?: string }; isCancelled?: boolean; start?: GraphDateTimeTimeZone; end?: GraphDateTimeTimeZone; createdDateTime?: string; lastModifiedDateTime?: string; originalStart?: string; recurrence?: GraphPatternedRecurrence | null; attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }>; isReminderOn?: boolean; reminderMinutesBeforeStart?: number | null; type?: string; seriesMasterId?: string }
 interface GraphDateTimeTimeZone { dateTime?: string; timeZone?: string }

@@ -54,16 +54,18 @@ class ICalendarUtil {
   public static fromICS(ics: string, fallbackUid: string): CalendarEvent {
     const unfolded = ics.replace(/\r?\n[ \t]/g, '');
     const lines = unfolded.split(/\r?\n/);
+    const eventLines = ICalendarUtil.componentLines(lines, 'VEVENT') || lines;
+    const eventPropertyLines = ICalendarUtil.withoutComponentLines(eventLines, 'VALARM');
     const get = (name: string): string | undefined => {
-      const prefix = `${name}`;
-      const line = lines.find((item) => item.toUpperCase().startsWith(prefix));
+      const line = eventPropertyLines.find((item) => ICalendarUtil.propertyName(item) === name.toUpperCase());
       if (!line) return undefined;
       const index = line.indexOf(':');
       return index >= 0 ? ICalendarUtil.unescape(line.slice(index + 1)) : undefined;
     };
-    const start = ICalendarUtil.parseDateLine(lines, 'DTSTART');
-    const end = ICalendarUtil.parseDateLine(lines, 'DTEND');
-    const recurrence = lines.filter((line) => /^RRULE|^EXDATE/i.test(line)).map((line) => line.trim());
+    const start = ICalendarUtil.parseDateLine(eventPropertyLines, 'DTSTART');
+    const end = ICalendarUtil.parseDateLine(eventPropertyLines, 'DTEND');
+    const recurrence = eventPropertyLines.filter((line) => /^RRULE|^EXDATE/i.test(line)).map((line) => line.trim());
+    const alarms = ICalendarUtil.parseAlarms(eventLines);
     return {
       uid: get('UID') || fallbackUid,
       summary: get('SUMMARY'),
@@ -73,6 +75,7 @@ class ICalendarUtil {
       start,
       end,
       recurrence: recurrence.length ? recurrence : undefined,
+      alarms: alarms.length ? alarms : undefined,
     };
   }
 
@@ -88,7 +91,7 @@ class ICalendarUtil {
   }
 
   private static parseDateLine(lines: string[], name: string): CalendarEvent['start'] {
-    const line = lines.find((item) => item.toUpperCase().startsWith(name));
+    const line = lines.find((item) => ICalendarUtil.propertyName(item) === name.toUpperCase());
     if (!line) return { dateTime: new Date().toISOString(), timeZone: 'UTC' };
     const value = line.slice(line.indexOf(':') + 1);
     if (/VALUE=DATE/i.test(line)) return { date: `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}` };
@@ -96,6 +99,110 @@ class ICalendarUtil {
     if (/Z$/i.test(value)) return { dateTime: ICalendarUtil.fromUtcStamp(value), timeZone: 'UTC' };
     const dateTime = ICalendarUtil.fromLocalStamp(value);
     return timeZone ? { dateTime, timeZone } : { dateTime };
+  }
+
+  private static parseAlarms(eventLines: string[]): NonNullable<CalendarEvent['alarms']> {
+    return ICalendarUtil.componentBlocks(eventLines, 'VALARM')
+      .map((alarmLines) => {
+        const triggerLine = alarmLines.find((line) => ICalendarUtil.propertyName(line) === 'TRIGGER');
+        const triggerMinutesBeforeStart = triggerLine ? ICalendarUtil.parseAlarmTrigger(triggerLine) : undefined;
+        if (triggerMinutesBeforeStart === undefined) return undefined;
+        const description = ICalendarUtil.propertyValue(alarmLines.find((line) => ICalendarUtil.propertyName(line) === 'DESCRIPTION'));
+        return { triggerMinutesBeforeStart, ...(description !== undefined ? { description } : {}) };
+      })
+      .filter((alarm): alarm is NonNullable<CalendarEvent['alarms']>[number] => Boolean(alarm));
+  }
+
+  private static parseAlarmTrigger(line: string): number | undefined {
+    if (ICalendarUtil.getParameter(line, 'RELATED')?.toUpperCase() === 'END') return undefined;
+    const value = ICalendarUtil.rawPropertyValue(line);
+    if (!value) return undefined;
+    const durationMinutes = ICalendarUtil.durationMinutes(value);
+    if (durationMinutes === undefined || durationMinutes > 0) return undefined;
+    return Math.ceil(Math.abs(durationMinutes));
+  }
+
+  private static durationMinutes(value: string): number | undefined {
+    const match = /^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i.exec(value);
+    if (!match) return undefined;
+    const [, sign, weeks, days, hours, minutes, seconds] = match;
+    if (![weeks, days, hours, minutes, seconds].some((part) => part !== undefined)) return undefined;
+    const totalMinutes =
+      ICalendarUtil.numberPart(weeks) * 7 * 24 * 60 +
+      ICalendarUtil.numberPart(days) * 24 * 60 +
+      ICalendarUtil.numberPart(hours) * 60 +
+      ICalendarUtil.numberPart(minutes) +
+      ICalendarUtil.numberPart(seconds) / 60;
+    return sign === '-' ? -totalMinutes : totalMinutes;
+  }
+
+  private static numberPart(value?: string | undefined): number {
+    return value ? Number(value) : 0;
+  }
+
+  private static componentLines(lines: string[], component: string): string[] | undefined {
+    const blocks = ICalendarUtil.componentBlocks(lines, component);
+    return blocks[0];
+  }
+
+  private static componentBlocks(lines: string[], component: string): string[][] {
+    const begin = `BEGIN:${component.toUpperCase()}`;
+    const end = `END:${component.toUpperCase()}`;
+    const blocks: string[][] = [];
+    let depth = 0;
+    let block: string[] = [];
+    for (const line of lines) {
+      const upper = line.toUpperCase();
+      if (upper === begin) {
+        if (depth === 0) block = [];
+        else block.push(line);
+        depth += 1;
+        continue;
+      }
+      if (upper === end && depth > 0) {
+        depth -= 1;
+        if (depth === 0) blocks.push(block);
+        else block.push(line);
+        continue;
+      }
+      if (depth > 0) block.push(line);
+    }
+    return blocks;
+  }
+
+  private static withoutComponentLines(lines: string[], component: string): string[] {
+    const begin = `BEGIN:${component.toUpperCase()}`;
+    const end = `END:${component.toUpperCase()}`;
+    const result: string[] = [];
+    let depth = 0;
+    for (const line of lines) {
+      const upper = line.toUpperCase();
+      if (upper === begin) {
+        depth += 1;
+        continue;
+      }
+      if (upper === end && depth > 0) {
+        depth -= 1;
+        continue;
+      }
+      if (depth === 0) result.push(line);
+    }
+    return result;
+  }
+
+  private static propertyName(line: string): string {
+    const index = line.search(/[;:]/);
+    return (index >= 0 ? line.slice(0, index) : line).toUpperCase();
+  }
+
+  private static propertyValue(line?: string | undefined): string | undefined {
+    const value = ICalendarUtil.rawPropertyValue(line);
+    return value === undefined ? undefined : ICalendarUtil.unescape(value);
+  }
+
+  private static rawPropertyValue(line?: string | undefined): string | undefined {
+    const index = line?.indexOf(':') ?? -1;
+    return index >= 0 ? line?.slice(index + 1) : undefined;
   }
 
   private static toUtcStamp(value: string): string {

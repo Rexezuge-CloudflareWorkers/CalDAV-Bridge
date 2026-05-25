@@ -148,6 +148,42 @@ class ConnectedApplicationDAO {
     await this.database.prepare('DELETE FROM connected_applications WHERE application_id = ? AND user_email = ?').bind(applicationId, userEmail).run();
   }
 
+  public async deleteDraftsUpdatedBefore(cutoff: number, limit: number): Promise<number> {
+    const result = await this.database
+      .prepare(
+        `
+          DELETE FROM connected_applications
+          WHERE application_id IN (
+            SELECT application_id
+            FROM connected_applications
+            WHERE status = ? AND updated_at < ?
+            LIMIT ?
+          )
+        `,
+      )
+      .bind(CONNECTED_APPLICATION_STATUS_DRAFT, cutoff, limit)
+      .run();
+    return result.meta?.changes ?? 0;
+  }
+
+  public async deleteOrphaned(limit: number): Promise<number> {
+    const result = await this.database
+      .prepare(
+        `
+          DELETE FROM connected_applications
+          WHERE application_id IN (
+            SELECT application_id
+            FROM connected_applications
+            WHERE user_email NOT IN (SELECT email FROM users)
+            LIMIT ?
+          )
+        `,
+      )
+      .bind(limit)
+      .run();
+    return result.meta?.changes ?? 0;
+  }
+
   private async getRowById(applicationId: string, userEmail?: string): Promise<ConnectedApplicationInternal | undefined> {
     const whereUser = userEmail ? ' AND user_email = ?' : '';
     const bindings = userEmail ? [applicationId, userEmail] : [applicationId];

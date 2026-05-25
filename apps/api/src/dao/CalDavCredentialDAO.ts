@@ -113,6 +113,42 @@ class CalDavCredentialDAO {
       .run();
   }
 
+  public async deleteExpiredBefore(cutoff: number, limit: number): Promise<number> {
+    const result = await this.database
+      .prepare(
+        `
+          DELETE FROM caldav_credentials
+          WHERE credential_id IN (
+            SELECT credential_id
+            FROM caldav_credentials
+            WHERE expires_at < ?
+            LIMIT ?
+          )
+        `,
+      )
+      .bind(cutoff, limit)
+      .run();
+    return result.meta?.changes ?? 0;
+  }
+
+  public async deleteOrphaned(limit: number): Promise<number> {
+    const result = await this.database
+      .prepare(
+        `
+          DELETE FROM caldav_credentials
+          WHERE credential_id IN (
+            SELECT credential_id
+            FROM caldav_credentials
+            WHERE application_id NOT IN (SELECT application_id FROM connected_applications)
+            LIMIT ?
+          )
+        `,
+      )
+      .bind(limit)
+      .run();
+    return result.meta?.changes ?? 0;
+  }
+
   private toMetadata(row: CalDavCredentialInternal): CalDavCredentialMetadata {
     return {
       credentialId: row.credential_id,

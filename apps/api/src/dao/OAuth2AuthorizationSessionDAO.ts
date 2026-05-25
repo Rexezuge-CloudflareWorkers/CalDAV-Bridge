@@ -50,6 +50,42 @@ class OAuth2AuthorizationSessionDAO {
       .bind(TimestampUtil.getCurrentUnixTimestampInSeconds(), sessionId)
       .run();
   }
+
+  public async deleteTerminalBefore(cutoff: number, limit: number): Promise<number> {
+    const result = await this.database
+      .prepare(
+        `
+          DELETE FROM oauth2_authorization_sessions
+          WHERE session_id IN (
+            SELECT session_id
+            FROM oauth2_authorization_sessions
+            WHERE expires_at < ? OR (consumed_at IS NOT NULL AND consumed_at < ?)
+            LIMIT ?
+          )
+        `,
+      )
+      .bind(cutoff, cutoff, limit)
+      .run();
+    return result.meta?.changes ?? 0;
+  }
+
+  public async deleteOrphaned(limit: number): Promise<number> {
+    const result = await this.database
+      .prepare(
+        `
+          DELETE FROM oauth2_authorization_sessions
+          WHERE session_id IN (
+            SELECT session_id
+            FROM oauth2_authorization_sessions
+            WHERE application_id NOT IN (SELECT application_id FROM connected_applications)
+            LIMIT ?
+          )
+        `,
+      )
+      .bind(limit)
+      .run();
+    return result.meta?.changes ?? 0;
+  }
 }
 
 export { OAuth2AuthorizationSessionDAO };

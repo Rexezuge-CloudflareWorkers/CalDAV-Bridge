@@ -27,6 +27,34 @@ describe('CalDavBridgeWorker DAV routing', () => {
   });
 });
 
+describe('CalDavBridgeWorker scheduled tasks', () => {
+  it('delegates scheduled events to the singleton cron tasks durable object', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 'completed' })));
+    const cronTasks = {
+      idFromName: vi.fn(() => 'cron-tasks-id'),
+      get: vi.fn(() => ({ fetch })),
+    };
+    const waitUntil = vi.fn();
+    const scheduled = {
+      cron: '0 4 * * *',
+      scheduledTime: 123456,
+      noRetry: vi.fn(),
+    } as ScheduledController;
+
+    await new CalDavBridgeWorker().scheduled(scheduled, { CRON_TASKS: cronTasks } as unknown as Env, { waitUntil } as unknown as ExecutionContext);
+
+    expect(cronTasks.idFromName).toHaveBeenCalledWith('global');
+    expect(cronTasks.get).toHaveBeenCalledWith('cron-tasks-id');
+    expect(waitUntil).toHaveBeenCalledOnce();
+    await waitUntil.mock.calls[0][0];
+    expect(fetch).toHaveBeenCalledOnce();
+    const request = fetch.mock.calls[0][0] as Request;
+    expect(request.method).toBe('POST');
+    expect(new URL(request.url).pathname).toBe('/run');
+    await expect(request.json()).resolves.toEqual({ cron: '0 4 * * *', scheduledTime: 123456 });
+  });
+});
+
 function fetchWorker(request: Request): Promise<Response> {
   return new CalDavBridgeWorker().fetch(request, {} as Env, {} as ExecutionContext);
 }

@@ -25,12 +25,20 @@
         "name": "OAUTH2_TOKEN_REFRESHERS",
         "class_name": "OAuth2TokenRefreshWorker",
       },
+      {
+        "name": "CRON_TASKS",
+        "class_name": "CronTasksWorker",
+      },
     ],
   },
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": ["OAuth2TokenRefreshWorker"],
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["CronTasksWorker"],
     },
   ],
   "d1_databases": [
@@ -64,5 +72,14 @@
     "MAX_CALDAV_CREDENTIALS_PER_APPLICATION": "5",
     "DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS": "365",
     "MAX_CALDAV_CREDENTIAL_EXPIRY_DAYS": "365",
+    "DB_CLEANUP_BATCH_SIZE": "100",
+    "DB_CLEANUP_OAUTH2_SESSION_RETENTION_DAYS": "1",
+    "DB_CLEANUP_CALDAV_CREDENTIAL_RETENTION_DAYS": "0",
+    "DB_CLEANUP_CALENDAR_TOMBSTONE_RETENTION_DAYS": "90",
+    "DB_CLEANUP_DRAFT_APPLICATION_RETENTION_DAYS": "30",
+    "DB_CLEANUP_EMPTY_USER_RETENTION_DAYS": "90",
+  },
+  "triggers": {
+    "crons": ["0 4 * * *"],
   },
 }

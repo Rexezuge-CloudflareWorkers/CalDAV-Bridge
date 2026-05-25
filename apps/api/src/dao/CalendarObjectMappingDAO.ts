@@ -165,6 +165,42 @@ class CalendarObjectMappingDAO {
     return { ...mapping, deletedAt: now, syncVersion };
   }
 
+  public async deleteDeletedBefore(cutoff: number, limit: number): Promise<number> {
+    const result = await this.database
+      .prepare(
+        `
+          DELETE FROM calendar_object_mappings
+          WHERE object_id IN (
+            SELECT object_id
+            FROM calendar_object_mappings
+            WHERE deleted_at IS NOT NULL AND deleted_at < ?
+            LIMIT ?
+          )
+        `,
+      )
+      .bind(cutoff, limit)
+      .run();
+    return result.meta?.changes ?? 0;
+  }
+
+  public async deleteOrphaned(limit: number): Promise<number> {
+    const result = await this.database
+      .prepare(
+        `
+          DELETE FROM calendar_object_mappings
+          WHERE object_id IN (
+            SELECT object_id
+            FROM calendar_object_mappings
+            WHERE application_id NOT IN (SELECT application_id FROM connected_applications)
+            LIMIT ?
+          )
+        `,
+      )
+      .bind(limit)
+      .run();
+    return result.meta?.changes ?? 0;
+  }
+
   private toMapping(row: CalendarObjectMappingInternal): CalendarObjectMapping {
     return {
       objectId: row.object_id,

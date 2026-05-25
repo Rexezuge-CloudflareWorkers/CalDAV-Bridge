@@ -58,6 +58,7 @@ describe('CalDavUtil', () => {
     expect(response).toContain('<D:href>/dav/calendars/app-1/work%40example.com/</D:href>');
     expect(response).toContain('<D:resourcetype><D:collection/><C:calendar/></D:resourcetype>');
     expect(response).toContain('<D:supported-report-set><D:supported-report><D:report><C:calendar-query/></D:report></D:supported-report>');
+    expect(response).toContain('<D:report><D:sync-collection/></D:report>');
   });
 
   it('returns object metadata for depth-one calendar PROPFIND', async () => {
@@ -130,6 +131,29 @@ describe('CalDavUtil', () => {
     expect(second).not.toBe(first);
   });
 
+  it('derives calendar getctag from deleted object tombstones', async () => {
+    const request = CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"><D:prop><CS:getctag/></D:prop></D:propfind>');
+    const response = await CalDavUtil.propfindCalendar('app-1', { id: 'cal-1', name: 'Calendar', etag: 'calendar-etag' }, request, 0, [
+      { href: 'event-1.ics', status: 404, syncVersion: 2 },
+    ]).text();
+
+    expect(response).toContain('<CS:getctag>app-1:cal-1:calendar-etag:event-1.ics:deleted:404:2</CS:getctag>');
+  });
+
+  it('returns sync-token on calendar PROPFIND', async () => {
+    const request = CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:"><D:prop><D:sync-token/></D:prop></D:propfind>');
+    const response = await CalDavUtil.propfindCalendar(
+      'app-1',
+      { id: 'cal-1', name: 'Calendar' },
+      request,
+      0,
+      [],
+      CalDavUtil.syncToken('app-1', 'cal-1', 3),
+    ).text();
+
+    expect(response).toContain('<D:sync-token>caldav-bridge:app-1:cal-1:3</D:sync-token>');
+  });
+
   it('reports unknown requested properties in a 404 propstat', async () => {
     const response = await CalDavUtil.propfindCalendar(
       'app-1',
@@ -152,6 +176,11 @@ describe('CalDavUtil', () => {
     const query = CalDavUtil.parseReport('<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"><C:time-range start="20260501T000000Z" end="20260601T000000Z"/></C:comp-filter></C:comp-filter></C:filter></C:calendar-query>');
     expect(query.type).toBe('calendar-query');
     expect(query.timeRange).toEqual({ start: '2026-05-01T00:00:00Z', end: '2026-06-01T00:00:00Z' });
+
+    const sync = CalDavUtil.parseReport('<D:sync-collection xmlns:D="DAV:"><D:sync-token>caldav-bridge:app-1:cal-1:2</D:sync-token><D:prop><D:getetag/></D:prop></D:sync-collection>');
+    expect(sync.type).toBe('sync-collection');
+    expect(sync.syncToken).toBe('caldav-bridge:app-1:cal-1:2');
+    expect(CalDavUtil.syncVersionFromToken(sync.syncToken)).toBe(2);
   });
 
   it('returns quoted etags and calendar data in object reports', async () => {
@@ -183,6 +212,20 @@ describe('CalDavUtil', () => {
 
     expect(response).toContain('<D:href>/dav/calendars/app-1/cal-1/missing.ics</D:href>');
     expect(response).toContain('<D:status>HTTP/1.1 404 Not Found</D:status>');
+  });
+
+  it('returns sync-collection tombstones and the next sync token', async () => {
+    const response = await CalDavUtil.syncCollectionReport(
+      'app-1',
+      'cal-1',
+      [{ href: 'deleted.ics', status: 404, syncVersion: 4 }],
+      ['getetag', 'calendar-data'],
+      CalDavUtil.syncToken('app-1', 'cal-1', 4),
+    ).text();
+
+    expect(response).toContain('<D:href>/dav/calendars/app-1/cal-1/deleted.ics</D:href>');
+    expect(response).toContain('<D:status>HTTP/1.1 404 Not Found</D:status>');
+    expect(response).toContain('<D:sync-token>caldav-bridge:app-1:cal-1:4</D:sync-token>');
   });
 
   it('escapes iCalendar data safely when embedding it in DAV XML', async () => {

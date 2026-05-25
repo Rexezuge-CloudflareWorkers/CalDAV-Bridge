@@ -21,6 +21,7 @@ interface DavReportRequest {
   type: DavReportKind;
   properties: string[];
   hrefs: string[];
+  syncToken?: string | undefined;
   timeRange?: DavTimeRange | undefined;
 }
 
@@ -33,6 +34,7 @@ interface DavCalendarObjectResult {
   href: string;
   event?: CalendarEvent | undefined;
   status?: number | undefined;
+  syncVersion?: number | undefined;
 }
 
 interface DavPropertyContext {
@@ -40,6 +42,7 @@ interface DavPropertyContext {
   calendar?: ProviderCalendar | undefined;
   calendarId?: string | undefined;
   collectionTag?: string | undefined;
+  syncToken?: string | undefined;
   event?: CalendarEvent | undefined;
   objectHref?: string | undefined;
 }
@@ -125,13 +128,14 @@ class CalDavUtil {
     return CalDavUtil.multistatus(responses);
   }
 
-  public static propfindCalendar(applicationId: string, calendar: ProviderCalendar, request: DavPropfindRequest, depth: number, objects: DavCalendarObjectResult[] = []): Response {
+  public static propfindCalendar(applicationId: string, calendar: ProviderCalendar, request: DavPropfindRequest, depth: number, objects: DavCalendarObjectResult[] = [], syncToken?: string | undefined): Response {
     const responses = [
       CalDavUtil.resourceResponse(CalDavUtil.calendarHref(applicationId, calendar.id), request, 'calendar', {
         applicationId,
         calendar,
         calendarId: calendar.id,
         collectionTag: CalDavUtil.collectionTag(applicationId, calendar, objects),
+        syncToken,
       }),
     ];
     if (depth > 0) {
@@ -163,6 +167,18 @@ class CalDavUtil {
         if (!result.event) return CalDavUtil.statusResponse(href, result.status || 404);
         return CalDavUtil.resourceResponse(href, request, 'object', { applicationId, calendarId, event: result.event, objectHref: result.href });
       }),
+    );
+  }
+
+  public static syncCollectionReport(applicationId: string, calendarId: string, results: DavCalendarObjectResult[], properties: string[], syncToken: string): Response {
+    const request = CalDavUtil.reportPropRequest(properties);
+    return CalDavUtil.multistatus(
+      results.map((result) => {
+        const href = CalDavUtil.objectHref(applicationId, calendarId, result.href);
+        if (!result.event) return CalDavUtil.statusResponse(href, result.status || 404);
+        return CalDavUtil.resourceResponse(href, request, 'object', { applicationId, calendarId, event: result.event, objectHref: result.href });
+      }),
+      syncToken,
     );
   }
 
@@ -199,8 +215,19 @@ class CalDavUtil {
       type,
       properties: CalDavUtil.extractPropNames(body),
       hrefs: CalDavUtil.extractHrefs(body),
+      syncToken: CalDavUtil.extractElementText(body, 'sync-token'),
       timeRange: CalDavUtil.extractTimeRange(body),
     };
+  }
+
+  public static syncToken(applicationId: string, calendarId: string, syncVersion: number): string {
+    return `caldav-bridge:${encodeURIComponent(applicationId)}:${encodeURIComponent(calendarId)}:${Math.max(0, Math.trunc(syncVersion))}`;
+  }
+
+  public static syncVersionFromToken(syncToken?: string | undefined): number {
+    if (!syncToken) return 0;
+    const version = Number(syncToken.split(':').pop());
+    return Number.isFinite(version) && version > 0 ? Math.trunc(version) : 0;
   }
 
   public static objectHrefFromDavHref(href: string, applicationId: string, calendarId: string): string | undefined {
@@ -250,8 +277,9 @@ class CalDavUtil {
     return 'OPTIONS, PROPFIND, REPORT, GET, HEAD, PUT, DELETE';
   }
 
-  private static multistatus(responses: string[]): Response {
-    return CalDavUtil.xmlResponse(`<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:CS="http://calendarserver.org/ns/">${responses.join('')}</D:multistatus>`);
+  private static multistatus(responses: string[], syncToken?: string | undefined): Response {
+    const token = syncToken ? `<D:sync-token>${CalDavUtil.escape(syncToken)}</D:sync-token>` : '';
+    return CalDavUtil.xmlResponse(`<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:CS="http://calendarserver.org/ns/">${responses.join('')}${token}</D:multistatus>`);
   }
 
   private static resourceResponse(href: string, request: DavPropfindRequest, resource: DavResourceKind, context: DavPropertyContext): string {
@@ -296,6 +324,7 @@ class CalDavUtil {
         'supported-calendar-data',
         'max-resource-size',
         'getctag',
+        'sync-token',
         'current-user-privilege-set',
         'supported-report-set',
       ];
@@ -347,11 +376,13 @@ class CalDavUtil {
         return '<C:max-resource-size>10485760</C:max-resource-size>';
       case 'getctag':
         return context.collectionTag ? `<CS:getctag>${CalDavUtil.escape(context.collectionTag)}</CS:getctag>` : undefined;
+      case 'sync-token':
+        return context.syncToken ? `<D:sync-token>${CalDavUtil.escape(context.syncToken)}</D:sync-token>` : undefined;
       case 'current-user-privilege-set':
         return CalDavUtil.privileges(calendar?.readOnly === true);
       case 'supported-report-set':
         if (resource !== 'calendar') return '<D:supported-report-set/>';
-        return '<D:supported-report-set><D:supported-report><D:report><C:calendar-query/></D:report></D:supported-report><D:supported-report><D:report><C:calendar-multiget/></D:report></D:supported-report></D:supported-report-set>';
+        return '<D:supported-report-set><D:supported-report><D:report><C:calendar-query/></D:report></D:supported-report><D:supported-report><D:report><C:calendar-multiget/></D:report></D:supported-report><D:supported-report><D:report><D:sync-collection/></D:report></D:supported-report></D:supported-report-set>';
       case 'getetag':
         return event ? `<D:getetag>${CalDavUtil.escape(CalDavUtil.eventEtag(event))}</D:getetag>` : undefined;
       case 'getcontenttype':
@@ -377,8 +408,12 @@ class CalDavUtil {
   private static collectionTag(applicationId: string, calendar: ProviderCalendar, objects: DavCalendarObjectResult[]): string {
     const calendarTag = calendar.etag || calendar.name;
     const objectTags = objects
-      .filter((object): object is DavCalendarObjectResult & { event: CalendarEvent } => Boolean(object.event))
-      .map((object) => `${object.href}:${object.event.etag || object.event.updated || object.event.uid}`)
+      .map((object) => {
+        const version = object.syncVersion ? `:${object.syncVersion}` : '';
+        return object.event
+          ? `${object.href}:${object.event.etag || object.event.updated || object.event.uid}${version}`
+          : `${object.href}:deleted:${object.status || 404}${version}`;
+      })
       .sort()
       .join('|');
     return `${applicationId}:${calendar.id}:${objectTags ? `${calendarTag}:${objectTags}` : calendarTag}`;
@@ -439,6 +474,11 @@ class CalDavUtil {
     let match: RegExpExecArray | null;
     while ((match = regex.exec(xml))) hrefs.push(CalDavUtil.unescapeXml((match[1] || '').trim()));
     return hrefs;
+  }
+
+  private static extractElementText(xml: string, name: string): string | undefined {
+    const match = new RegExp(`<(?:[\\w.-]+:)?${name}\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?${name}>`, 'i').exec(xml);
+    return match ? CalDavUtil.unescapeXml((match[1] || '').trim()) : undefined;
   }
 
   private static extractTimeRange(xml: string): DavTimeRange | undefined {

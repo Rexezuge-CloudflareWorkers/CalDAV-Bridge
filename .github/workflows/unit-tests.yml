@@ -28,3 +28,20 @@ jobs:
 
       - name: Run Tests and Checks
         run: pnpm run checks
+
+  dependabot-auto-merge:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.state == 'open' && !github.event.repository.fork }}
+    name: Auto-Merge Dependabot PR
+    needs:
+      - test
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Enable Auto-Merge
+        run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}

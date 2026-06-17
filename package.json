@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "pnpm run typegen",
+    "postinstall": "node scripts/ensure-spa-shell-stub.mjs && pnpm run typegen",
     "build": "pnpm -r build",
-    "checks": "pnpm -r typecheck && pnpm run test",
+    "checks": "pnpm -r typecheck && pnpm run lint && pnpm run test",
     "prettier": "prettier --write .",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",

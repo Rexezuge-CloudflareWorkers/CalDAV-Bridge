@@ -1,0 +1,153 @@
+name: Continuous Deployment
+
+on:
+  workflow_run:
+    workflows:
+      - Continuous Integration
+    types:
+      - completed
+    branches:
+      - main
+  repository_dispatch:
+    types:
+      - Upstream Sync Deployment
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'repository_dispatch' && github.event.client_payload.branch || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-worker:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    name: Deploy Worker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Prepare Wrangler Configuration
+        run: pnpm exec tsx scripts/prepare-wrangler-config.ts
+        env:
+          WRANGLER_JSONC: ${{ vars.WRANGLER_JSONC }}
+          WRANGLER_VARS_PATCH_JSON: ${{ vars.WRANGLER_VARS_PATCH_JSON }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Check Wrangler Config Version
+        run: |
+          MIN_VERSION=$(node -e "
+            const { parse } = require('jsonc-parser');
+            const fs = require('fs');
+            const template = parse(fs.readFileSync('apps/api/wrangler.template.jsonc', 'utf8'));
+            console.log(template.compatibility_date || '0');
+          ")
+          CONFIG_VERSION=$(node -e "
+            const { parse } = require('jsonc-parser');
+            const fs = require('fs');
+            const config = parse(fs.readFileSync('wrangler.jsonc', 'utf8'));
+            console.log(config.compatibility_date || '0');
+          ")
+          if [ "$(printf '%s\n' "$MIN_VERSION" "$CONFIG_VERSION" | sort -V | head -n1)" != "$MIN_VERSION" ]; then
+            echo "Error: wrangler.jsonc compatibility_date ($CONFIG_VERSION) is older than template minimum ($MIN_VERSION)"
+            exit 1
+          fi
+          echo "Wrangler config version check passed: $CONFIG_VERSION >= $MIN_VERSION"
+
+      - name: Initialize Cloudflare Secrets Store
+        run: pnpm exec tsx scripts/init-secrets.ts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Apply Database Migration
+        run: yes | pnpm exec wrangler d1 migrations apply --remote caldav-bridge-db
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Build Web App
+        run: pnpm --filter @caldav-bridge/web build
+
+      - name: Typecheck API Worker
+        run: pnpm --filter @caldav-bridge/api typecheck
+
+      - name: Dry Run Deploy with Wrangler
+        run: pnpm exec wrangler deploy --dry-run
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy with Wrangler
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-pages:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    name: Deploy Frontend to Cloudflare Pages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Build Frontend
+        run: pnpm --filter @caldav-bridge/web build
+
+      - name: Configure Pages Service Bindings
+        run: |
+          if [ -z "${CLOUDFLARE_PAGES_PROJECT_NAME}" ]; then
+            echo "CLOUDFLARE_PAGES_PROJECT_NAME repository variable is required"
+            exit 1
+          fi
+          cp apps/web/wrangler.template.jsonc wrangler.jsonc
+        env:
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
+
+      - name: Deploy with Wrangler Pages
+        run: |
+          pnpm exec wrangler pages deploy \
+            --project-name "${CLOUDFLARE_PAGES_PROJECT_NAME}" \
+            --branch "${DEPLOY_BRANCH}" \
+            --commit-hash "${DEPLOY_SHA}" \
+            --commit-message "$(git log -1 --pretty=%s)"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
+          DEPLOY_BRANCH: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.branch || github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
+          DEPLOY_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}

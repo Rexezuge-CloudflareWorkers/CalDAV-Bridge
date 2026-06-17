@@ -1,0 +1,42 @@
+name: Upstream Sync
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    if: ${{ github.event.repository.fork }}
+    name: Sync Fork with Upstream
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync with Upstream
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
+        with:
+          upstream_repository: Rexezuge-CloudflareWorkers/CalDAV-Bridge
+          upstream_branch: main
+          target_branch: main
+          git_remote_name: upstream
+
+      - name: Dispatch Upstream Sync Event
+        if: ${{ steps.sync.outputs.sync_changes == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'Upstream Sync',
+              client_payload: {
+                branch: 'main',
+                sha: context.sha,
+              },
+            });

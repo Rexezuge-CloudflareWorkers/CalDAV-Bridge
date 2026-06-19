@@ -310,12 +310,10 @@ class CalendarProviderUtil {
     if (depth > 4 || !/converted from text|\bPlainText\b/i.test(content)) return undefined;
     const plainText = CalendarProviderUtil.extractPlainTextDiv(content);
     if (plainText === undefined) return undefined;
-    const decoded = CalendarProviderUtil.decodeHtmlEntities(
-      plainText
-        .replace(/<br\s*\/?\s*>/gi, '\n')
-        .replace(/<\/(?:div|p)>/gi, '\n')
-        .replace(/<[^>]+>/g, ''),
-    )
+    const decoded = CalendarProviderUtil.decodeHtmlEntities(plainText)
+      .replace(/<br\s*\/?\s*>/gi, '\n')
+      .replace(/<\/(?:div|p)>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
       .replace(/\r\n?/g, '\n')
       .trim();
     return CalendarProviderUtil.unwrapExchangePlainTextHtml(decoded, depth + 1) ?? decoded;

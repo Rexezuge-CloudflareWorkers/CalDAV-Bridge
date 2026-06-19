@@ -318,7 +318,7 @@ class CalendarProviderUtil {
     )
       .replace(/\r\n?/g, '\n')
       .trim();
-    return CalendarProviderUtil.unwrapExchangePlainTextHtml(decoded, depth + 1) ?? decoded;
+    return CalendarProviderUtil.unwrapExchangePlainTextHtml(decoded, depth + 1) ?? decoded.replace(/[<>]/g, '');
   }
 
   private static extractPlainTextDiv(content: string): string | undefined {

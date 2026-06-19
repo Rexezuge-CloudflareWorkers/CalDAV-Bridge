@@ -29,7 +29,7 @@ class DatabaseCleanupTask extends IScheduledTask<DatabaseCleanupTaskEnv> {
   protected async handleScheduledTask(_event: ScheduledController, env: DatabaseCleanupTaskEnv, _ctx: ExecutionContext): Promise<void> {
     const counts = await this.cleanup(env);
     const totalDeleted = Object.values(counts).reduce((total, count) => total + count, 0);
-    console.log('Database cleanup completed.', { totalDeleted, counts });
+    console.log('Database cleanup completed.', { totalDeleted });
   }
 
   public async cleanup(env: DatabaseCleanupTaskEnv): Promise<DatabaseCleanupCounts> {

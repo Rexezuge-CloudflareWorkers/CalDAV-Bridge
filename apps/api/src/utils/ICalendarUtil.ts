@@ -243,7 +243,7 @@ class ICalendarUtil {
   }
 
   private static escapeParamValue(value: string): string {
-    return value.replace(/[,;:]/g, '\\$&');
+    return value.replace(/\\/g, '\\\\').replace(/[,;:]/g, '\\$&');
   }
 
   private static foldLines(lines: string[]): string[] {

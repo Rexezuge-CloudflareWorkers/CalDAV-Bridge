@@ -69,8 +69,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       hono:
-        specifier: ^4.12.25
-        version: 4.12.25
+        specifier: ^4.12.26
+        version: 4.12.26
       jose:
         specifier: ^6.2.3
         version: 6.2.3
@@ -1299,8 +1299,8 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  hono@4.12.25:
-    resolution: {integrity: sha512-2NFaIyNVgJmBs/ecmtGzlmluTFs5cHEWGTdu0t1HBwYzoGXOL5nUQBRMXsXWla5i4KkG//QMzVP88m1+I3fdAQ==}
+  hono@4.12.26:
+    resolution: {integrity: sha512-uyZtpnYxM9CmQ7QsQknM4zN8EftNqhON1qYeIKM0Se67CCEe2c44xyGURwB0axX2fBDu1dqHrHAc1hmNT8ITkw==}
     engines: {node: '>=16.9.0'}
 
   ignore@5.3.2:
@@ -2729,7 +2729,7 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  hono@4.12.25: {}
+  hono@4.12.26: {}
 
   ignore@5.3.2: {}
 

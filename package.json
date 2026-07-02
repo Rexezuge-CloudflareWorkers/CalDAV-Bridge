@@ -22,7 +22,7 @@
     "eslint-plugin-prettier": "^5.5.x",
     "globals": "^17.7.x",
     "jsonc-parser": "^3.3.1",
-    "prettier": "^3.8.x",
+    "prettier": "^3.9.x",
     "tailwindcss": "^4.3.x",
     "terser": "^5.48.x",
     "tsx": "^4.22.4",

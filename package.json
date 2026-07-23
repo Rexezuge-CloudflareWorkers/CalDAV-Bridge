@@ -26,7 +26,7 @@
     "tailwindcss": "^4.3.x",
     "terser": "^5.49.x",
     "tsx": "^4.23.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.65.x",
     "vite": "^8.1.x",
     "vitest": "^4.1.10",

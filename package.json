@@ -30,7 +30,7 @@
     "typescript-eslint": "^8.65.x",
     "vite": "^8.1.x",
     "vitest": "^4.1.10",
-    "wrangler": "^4.111.0"
+    "wrangler": "^4.114.0"
   },
   "packageManager": "pnpm@11.2.2"
 }

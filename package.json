@@ -25,7 +25,7 @@
     "prettier": "^3.9.x",
     "tailwindcss": "^4.3.x",
     "terser": "^5.49.x",
-    "tsx": "^4.23.0",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.67.x",
     "vite": "^8.1.x",

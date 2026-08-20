@@ -24,7 +24,7 @@
     "jsonc-parser": "^3.3.1",
     "prettier": "^3.9.x",
     "tailwindcss": "^4.3.x",
-    "terser": "^5.49.x",
+    "terser": "^5.50.x",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.67.x",

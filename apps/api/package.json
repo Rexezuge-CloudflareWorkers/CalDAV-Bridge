@@ -10,7 +10,7 @@
     "@caldav-bridge/shared": "workspace:*",
     "hono": "^4.13.2",
     "jose": "^6.2.10",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "26.3.x",

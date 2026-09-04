@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import path from 'path';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import path from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 
 const apiGeneratedDir = path.resolve(__dirname, '../../apps/api/src/generated');
 const apiSpaShellPath = path.resolve(apiGeneratedDir, 'spa-shell.ts');

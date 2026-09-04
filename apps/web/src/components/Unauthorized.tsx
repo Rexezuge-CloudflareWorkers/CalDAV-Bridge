@@ -1,0 +1,20 @@
+export default function Unauthorized() {
+  return (
+    <div className="min-h-screen bg-[var(--color-surface-base)] text-[var(--color-text-primary)] flex items-center justify-center">
+      <div className="text-center px-6">
+        <div className="text-3xl font-semibold mb-1 tracking-tight">
+          <span className="text-[var(--color-accent)]">CalDAV</span> Bridge
+        </div>
+        <h1 className="text-lg font-medium mt-4 mb-1">Access Required</h1>
+        <p className="text-[var(--color-text-secondary)] text-sm">You Must Authenticate To Access This Application.</p>
+        <button
+          type="button"
+          onClick={() => globalThis.location.assign('/user/')}
+          className="mt-6 inline-flex items-center justify-center rounded-xl bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-[#0d1008] transition-colors hover:bg-[var(--color-accent-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+        >
+          Authenticate With Cloudflare Zero Trust
+        </button>
+      </div>
+    </div>
+  );
+}

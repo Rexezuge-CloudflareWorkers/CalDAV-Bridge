@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PROVIDER_GOOGLE_CALENDAR, PROVIDER_MICROSOFT_OUTLOOK_CALENDAR } from '@caldav-bridge/shared/constants';
-import { CalendarProviderUtil, HttpError } from '@/utils';
+import { InternalServerError, NotFoundError, ServiceUnavailableError } from '@caldav-bridge/backend-errors';
+import { CalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar';
 
 describe('CalendarProviderUtil', () => {
   afterEach(() => {
@@ -337,7 +338,7 @@ describe('CalendarProviderUtil', () => {
 
     await expect(CalendarProviderUtil.getProfile(PROVIDER_GOOGLE_CALENDAR, 'token')).resolves.toEqual({ emailAddress: 'google@example.test' });
     await expect(CalendarProviderUtil.getProfile(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token')).resolves.toEqual({ emailAddress: 'microsoft@example.test' });
-    await expect(CalendarProviderUtil.getProfile(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token')).rejects.toMatchObject({ status: 502 });
+    await expect(CalendarProviderUtil.getProfile(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token')).rejects.toBeInstanceOf(InternalServerError);
   });
 
   it('sends provider-specific event writes', async () => {
@@ -458,17 +459,19 @@ describe('CalendarProviderUtil', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(CalendarProviderUtil.deleteEvent(PROVIDER_GOOGLE_CALENDAR, 'token', 'calendar-id', 'event-id')).resolves.toBeUndefined();
-    await expect(CalendarProviderUtil.deleteEvent(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id', 'event-id')).rejects.toMatchObject({ status: 502 });
+    await expect(CalendarProviderUtil.deleteEvent(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id', 'event-id')).rejects.toThrow(
+      'Calendar provider delete failed (500)',
+    );
   });
 
   it('maps long provider throttles to retryable service errors', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ error: { message: 'Application is over its MailboxConcurrency limit.' } }, 429, { 'Retry-After': '10' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id')).rejects.toMatchObject({
-      status: 503,
-      headers: { 'Retry-After': '10' },
-    });
+    const throttleError = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id').catch((error: unknown) => error);
+    expect(throttleError).toBeInstanceOf(ServiceUnavailableError);
+    expect((throttleError as ServiceUnavailableError).getErrorCode()).toBe(503);
+    expect((throttleError as ServiceUnavailableError).headers).toEqual({ 'Retry-After': '10' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -477,8 +480,8 @@ describe('CalendarProviderUtil', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const promise = CalendarProviderUtil.getEvent(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id', 'event-id');
-    await expect(promise).rejects.toBeInstanceOf(HttpError);
-    await expect(promise).rejects.toMatchObject({ status: 404 });
+    await expect(promise).rejects.toBeInstanceOf(NotFoundError);
+    await expect(promise).rejects.toThrow('Calendar provider request failed (410)');
     expect(preferHeader(fetchMock, 0)).toBe('outlook.body-content-type="text"');
   });
 });

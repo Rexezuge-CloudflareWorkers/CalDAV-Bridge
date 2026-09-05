@@ -15,6 +15,18 @@
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"],
+      "@caldav-bridge/background": ["../background/src"],
+      "@caldav-bridge/background/*": ["../background/src/*"],
+      "@caldav-bridge/backend-data": ["../../packages/backend-data/src"],
+      "@caldav-bridge/backend-data/*": ["../../packages/backend-data/src/*"],
+      "@caldav-bridge/backend-errors": ["../../packages/backend-errors/src"],
+      "@caldav-bridge/backend-errors/*": ["../../packages/backend-errors/src/*"],
+      "@caldav-bridge/backend-runtime": ["../../packages/backend-runtime/src"],
+      "@caldav-bridge/backend-runtime/*": ["../../packages/backend-runtime/src/*"],
+      "@caldav-bridge/backend-services": ["../../packages/backend-services/src"],
+      "@caldav-bridge/backend-services/*": ["../../packages/backend-services/src/*"],
+      "@caldav-bridge/provider-clients": ["../../packages/provider-clients/src"],
+      "@caldav-bridge/provider-clients/*": ["../../packages/provider-clients/src/*"],
       "@caldav-bridge/shared": ["../../packages/shared/src"],
       "@caldav-bridge/shared/*": ["../../packages/shared/src/*"]
     }

@@ -7,6 +7,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@caldav-bridge/background": "workspace:*",
+    "@caldav-bridge/backend-data": "workspace:*",
+    "@caldav-bridge/backend-errors": "workspace:*",
+    "@caldav-bridge/backend-runtime": "workspace:*",
+    "@caldav-bridge/backend-services": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
     "hono": "^4.13.5",
     "jose": "^6.2.10",

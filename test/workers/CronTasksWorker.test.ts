@@ -4,13 +4,13 @@ const { databaseCleanupHandle } = vi.hoisted(() => ({
   databaseCleanupHandle: vi.fn(),
 }));
 
-vi.mock('@/scheduled', () => ({
+vi.mock('@caldav-bridge/background/scheduled', () => ({
   DatabaseCleanupTask: class {
     handle = databaseCleanupHandle;
   },
 }));
 
-import { CronTasksWorker } from '@/workers/CronTasksWorker';
+import { CronTasksWorker } from '@caldav-bridge/background/CronTasksWorker';
 
 describe('CronTasksWorker', () => {
   beforeEach(() => {

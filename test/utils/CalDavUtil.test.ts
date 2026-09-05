@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CalDavUtil } from '@/utils';
+import { CalDavUtil } from '@caldav-bridge/backend-services/calendar';
 
 describe('CalDavUtil', () => {
   it('parses DAV resource paths', () => {

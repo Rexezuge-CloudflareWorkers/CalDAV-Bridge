@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PROVIDER_GOOGLE_CALENDAR, PROVIDER_MICROSOFT_OUTLOOK_CALENDAR } from '@caldav-bridge/shared/constants';
-import { HttpError, OAuth2ProviderUtil } from '@/utils';
+import { BadRequestError } from '@caldav-bridge/backend-errors';
+import { OAuth2ProviderUtil } from '@caldav-bridge/provider-clients/oauth2';
 
 describe('OAuth2ProviderUtil', () => {
   afterEach(() => {
@@ -56,17 +57,17 @@ describe('OAuth2ProviderUtil', () => {
         state: 'state-value',
         codeChallenge: 'challenge-value',
       }),
-    ).toThrow(HttpError);
+    ).toThrow(BadRequestError);
 
-    await expect(
-      OAuth2ProviderUtil.exchangeCode({
-        providerId: 'unsupported',
-        credentials: { clientId: 'client-id', clientSecret: 'client-secret' },
-        redirectUri: 'https://bridge.example.test/callback',
-        code: 'code',
-        codeVerifier: 'verifier',
-      }),
-    ).rejects.toMatchObject({ status: 400 });
+    const unsupportedError = await OAuth2ProviderUtil.exchangeCode({
+      providerId: 'unsupported',
+      credentials: { clientId: 'client-id', clientSecret: 'client-secret' },
+      redirectUri: 'https://bridge.example.test/callback',
+      code: 'code',
+      codeVerifier: 'verifier',
+    }).catch((error: unknown) => error);
+    expect(unsupportedError).toBeInstanceOf(BadRequestError);
+    expect((unsupportedError as BadRequestError).getErrorCode()).toBe(400);
   });
 
   it('exchanges authorization codes with x-www-form-urlencoded PKCE bodies', async () => {
@@ -99,15 +100,15 @@ describe('OAuth2ProviderUtil', () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ access_token: 'access-token', expires_in: 3600 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(
-      OAuth2ProviderUtil.exchangeCode({
-        providerId: PROVIDER_GOOGLE_CALENDAR,
-        credentials: { clientId: 'client-id', clientSecret: 'client-secret' },
-        redirectUri: 'https://bridge.example.test/callback',
-        code: 'code-value',
-        codeVerifier: 'verifier-value',
-      }),
-    ).rejects.toMatchObject({ status: 400 });
+    const missingTokenError = await OAuth2ProviderUtil.exchangeCode({
+      providerId: PROVIDER_GOOGLE_CALENDAR,
+      credentials: { clientId: 'client-id', clientSecret: 'client-secret' },
+      redirectUri: 'https://bridge.example.test/callback',
+      code: 'code-value',
+      codeVerifier: 'verifier-value',
+    }).catch((error: unknown) => error);
+    expect(missingTokenError).toBeInstanceOf(BadRequestError);
+    expect((missingTokenError as BadRequestError).getErrorCode()).toBe(400);
   });
 
   it('refreshes access tokens and preserves missing replacement refresh tokens', async () => {
@@ -127,31 +128,32 @@ describe('OAuth2ProviderUtil', () => {
     expect(body.get('refresh_token')).toBe('refresh-token');
   });
 
-  it('maps OAuth2 provider token failures to HttpError status codes', async () => {
+  it('maps OAuth2 provider token failures to service error codes', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ error: 'invalid_grant', error_description: 'Bad code' }, 400));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(
-      OAuth2ProviderUtil.exchangeCode({
-        providerId: PROVIDER_GOOGLE_CALENDAR,
-        credentials: { clientId: 'client-id', clientSecret: 'client-secret' },
-        redirectUri: 'https://bridge.example.test/callback',
-        code: 'code-value',
-        codeVerifier: 'verifier-value',
-      }),
-    ).rejects.toMatchObject({ status: 400, message: 'OAuth2 token request failed: Bad code' });
+    const tokenError = await OAuth2ProviderUtil.exchangeCode({
+      providerId: PROVIDER_GOOGLE_CALENDAR,
+      credentials: { clientId: 'client-id', clientSecret: 'client-secret' },
+      redirectUri: 'https://bridge.example.test/callback',
+      code: 'code-value',
+      codeVerifier: 'verifier-value',
+    }).catch((error: unknown) => error);
+    expect(tokenError).toBeInstanceOf(BadRequestError);
+    expect((tokenError as BadRequestError).getErrorCode()).toBe(400);
+    expect((tokenError as BadRequestError).message).toBe('OAuth2 token request failed: Bad code');
   });
 
   it('rejects refresh requests before calling providers when credentials are incomplete', async () => {
     const fetchMock = vi.fn<typeof fetch>();
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(
-      OAuth2ProviderUtil.refreshAccessToken({
-        providerId: PROVIDER_GOOGLE_CALENDAR,
-        credentials: { clientId: 'client-id', clientSecret: 'client-secret' },
-      }),
-    ).rejects.toMatchObject({ status: 400 });
+    const incompleteError = await OAuth2ProviderUtil.refreshAccessToken({
+      providerId: PROVIDER_GOOGLE_CALENDAR,
+      credentials: { clientId: 'client-id', clientSecret: 'client-secret' },
+    }).catch((error: unknown) => error);
+    expect(incompleteError).toBeInstanceOf(BadRequestError);
+    expect((incompleteError as BadRequestError).getErrorCode()).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

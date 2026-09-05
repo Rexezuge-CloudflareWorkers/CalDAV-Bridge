@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CryptoUtil, TimestampUtil, UUIDUtil } from '@caldav-bridge/shared/utils';
-import { decryptData, encryptData } from '@/crypto';
-import { BaseUrlUtil, ConfigurationUtil, HttpError, OAuth2StateUtil, errorResponse, jsonResponse, textResponse } from '@/utils';
+import { BadRequestError, ServiceUnavailableError } from '@caldav-bridge/backend-errors';
+import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
+import { errorResponse, jsonResponse, textResponse } from '@caldav-bridge/backend-runtime/http';
+import { decryptData, encryptData } from '@caldav-bridge/backend-data/crypto';
+import { OAuth2StateUtil } from '@caldav-bridge/backend-services/oauth2';
+import { BaseUrlUtil, CryptoUtil, TimestampUtil, UUIDUtil } from '@caldav-bridge/shared/utils';
 
 describe('backend core utilities', () => {
   afterEach(() => {
@@ -23,13 +26,17 @@ describe('backend core utilities', () => {
   });
 
   it('reads positive integer and SPA-serving configuration safely', () => {
-    expect(ConfigurationUtil.getPositiveInteger('12', '7')).toBe(12);
-    expect(ConfigurationUtil.getPositiveInteger('0', '7')).toBe(7);
-    expect(ConfigurationUtil.getPositiveInteger('-1', '7')).toBe(7);
-    expect(ConfigurationUtil.getPositiveInteger('not-a-number', '7')).toBe(7);
-    expect(ConfigurationUtil.getPositiveInteger(undefined, '7')).toBe(7);
-    expect(ConfigurationUtil.getServeSpaFromWorker({ SERVE_SPA_FROM_WORKER: 'true' })).toBe(true);
-    expect(ConfigurationUtil.getServeSpaFromWorker({ SERVE_SPA_FROM_WORKER: 'TRUE' })).toBe(false);
+    expect(ConfigurationManager.limits.getMaxApplicationsPerUser({ MAX_APPLICATIONS_PER_USER: '12' })).toBe(12);
+    expect(ConfigurationManager.limits.getMaxApplicationsPerUser({ MAX_APPLICATIONS_PER_USER: '0' })).toBe(99);
+    expect(ConfigurationManager.limits.getMaxApplicationsPerUser({ MAX_APPLICATIONS_PER_USER: '-1' })).toBe(99);
+    expect(ConfigurationManager.limits.getMaxApplicationsPerUser({ MAX_APPLICATIONS_PER_USER: 'not-a-number' })).toBe(99);
+    expect(ConfigurationManager.limits.getMaxApplicationsPerUser({})).toBe(99);
+    expect(ConfigurationManager.getServeSpaFromWorker({ SERVE_SPA_FROM_WORKER: 'true' })).toBe(true);
+    expect(ConfigurationManager.getServeSpaFromWorker({ SERVE_SPA_FROM_WORKER: 'TRUE' })).toBe(false);
+    expect(ConfigurationManager.oauth2.getStateExpiryMinutes({})).toBe(15);
+    expect(ConfigurationManager.caldav.getMaxCredentialsPerApplication({})).toBe(5);
+    expect(ConfigurationManager.caldav.getDefaultCredentialExpiryDays({})).toBe(365);
+    expect(ConfigurationManager.cleanup.getBatchSize({})).toBe(100);
   });
 
   it('creates JSON, text, and error responses with expected status and headers', async () => {
@@ -44,10 +51,16 @@ describe('backend core utilities', () => {
     expect(text.headers.get('X-Test')).toBe('yes');
     await expect(text.text()).resolves.toBe('plain');
 
-    const error = errorResponse(new HttpError(429, 'Slow down', { 'Retry-After': '5' }));
-    expect(error.status).toBe(429);
-    expect(error.headers.get('Retry-After')).toBe('5');
-    await expect(error.json()).resolves.toEqual({ error: 'Slow down' });
+    const clientError = errorResponse(new BadRequestError('Slow down'));
+    expect(clientError.status).toBe(400);
+    await expect(clientError.json()).resolves.toEqual({ error: 'Slow down' });
+
+    const throttled = new ServiceUnavailableError('Slow down');
+    throttled.headers = { 'Retry-After': '5' };
+    const throttledResponse = errorResponse(throttled);
+    expect(throttledResponse.status).toBe(503);
+    expect(throttledResponse.headers.get('Retry-After')).toBe('5');
+    await expect(throttledResponse.json()).resolves.toEqual({ error: 'Slow down' });
   });
 
   it('generates OAuth2 state values, hashes state, and computes RFC 7636 PKCE challenges', async () => {

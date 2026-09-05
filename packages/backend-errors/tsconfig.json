@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@caldav-bridge/backend-errors": ["./src"],
+      "@caldav-bridge/backend-errors/*": ["./src/*"]
+    }
+  },
+  "include": ["../../worker-configuration.d.ts", "src/**/*.ts"],
+  "exclude": ["node_modules"]
+}

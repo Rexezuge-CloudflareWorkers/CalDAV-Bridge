@@ -1,0 +1,29 @@
+{
+  "name": "@caldav-bridge/background",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./CronTasksWorker": "./src/CronTasksWorker.ts",
+    "./OAuth2TokenRefreshWorker": "./src/OAuth2TokenRefreshWorker.ts",
+    "./scheduled": "./src/scheduled/index.ts",
+    "./scheduled/*": "./src/scheduled/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@caldav-bridge/backend-data": "workspace:*",
+    "@caldav-bridge/backend-errors": "workspace:*",
+    "@caldav-bridge/backend-runtime": "workspace:*",
+    "@caldav-bridge/backend-services": "workspace:*",
+    "@caldav-bridge/provider-clients": "workspace:*",
+    "@caldav-bridge/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.x",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CalDavBridgeWorker, OAuth2TokenRefreshWorker } from '@/workers';
+import { CalDavBridgeWorker } from '@/workers';
+import { OAuth2TokenRefreshWorker } from '@caldav-bridge/background';
 
 describe('CalDavBridgeWorker DAV routing', () => {
   it('answers DAV OPTIONS without authentication', async () => {

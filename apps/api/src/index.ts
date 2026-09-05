@@ -1,6 +1,6 @@
 import { CalDavBridgeWorker } from './workers/CalDavBridgeWorker';
-export { CronTasksWorker } from './workers/CronTasksWorker';
-export { OAuth2TokenRefreshWorker } from './workers/OAuth2TokenRefreshWorker';
+export { CronTasksWorker } from '@caldav-bridge/background/CronTasksWorker';
+export { OAuth2TokenRefreshWorker } from '@caldav-bridge/background/OAuth2TokenRefreshWorker';
 
 const calDavBridgeWorker = new CalDavBridgeWorker();
 

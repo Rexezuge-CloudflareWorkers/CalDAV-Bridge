@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CalendarObjectMappingDAO } from '@/dao';
+import { CalendarObjectMappingDAO } from '@caldav-bridge/backend-data/dao';
 
 describe('CalendarObjectMappingDAO', () => {
   it('preserves a local CalDAV href when provider sync sees the same event id', async () => {

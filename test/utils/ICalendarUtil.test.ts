@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ICalendarUtil } from '@/utils';
+import { ICalendarUtil } from '@caldav-bridge/backend-services/calendar';
 
 describe('ICalendarUtil', () => {
   it('round trips core VEVENT fields', () => {

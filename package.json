@@ -9,6 +9,7 @@
     "prettier": "prettier --write .",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint --ext .ts,.tsx --fix .",
     "typegen": "wrangler types --config ./apps/api/wrangler.template.jsonc --env-interface CloudflareEnv"
   },
@@ -17,6 +18,7 @@
     "@types/react": "^19.2.x",
     "@types/react-dom": "^19.2.x",
     "@vitejs/plugin-react": "^6.1.x",
+    "@vitest/coverage-v8": "^4.1.x",
     "eslint": "^10.9.x",
     "eslint-config-prettier": "^10.1.x",
     "eslint-plugin-prettier": "^5.5.x",

@@ -1,0 +1,37 @@
+{
+  "name": "@caldav-bridge/backend-services",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./application": "./src/application/index.ts",
+    "./application/*": "./src/application/*.ts",
+    "./auth": "./src/auth/index.ts",
+    "./auth/*": "./src/auth/*.ts",
+    "./calendar": "./src/calendar/index.ts",
+    "./calendar/*": "./src/calendar/*.ts",
+    "./credential": "./src/credential/index.ts",
+    "./credential/*": "./src/credential/*.ts",
+    "./oauth2": "./src/oauth2/index.ts",
+    "./oauth2/*": "./src/oauth2/*.ts",
+    "./user": "./src/user/index.ts",
+    "./user/*": "./src/user/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@caldav-bridge/backend-data": "workspace:*",
+    "@caldav-bridge/backend-errors": "workspace:*",
+    "@caldav-bridge/backend-runtime": "workspace:*",
+    "@caldav-bridge/provider-clients": "workspace:*",
+    "@caldav-bridge/shared": "workspace:*",
+    "jose": "^6.2.10"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.x",
+    "typescript": "^6.0.3"
+  }
+}

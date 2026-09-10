@@ -28,7 +28,7 @@
     "@caldav-bridge/backend-runtime": "workspace:*",
     "@caldav-bridge/provider-clients": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "jose": "^6.2.10"
+    "jose": "^6.2.12"
   },
   "devDependencies": {
     "@types/node": "26.4.x",

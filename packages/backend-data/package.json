@@ -21,7 +21,7 @@
     "@caldav-bridge/shared": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "26.4.x",
+    "@types/node": "26.5.x",
     "typescript": "^6.0.3"
   }
 }

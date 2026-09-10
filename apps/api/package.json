@@ -13,7 +13,7 @@
     "@caldav-bridge/backend-runtime": "workspace:*",
     "@caldav-bridge/backend-services": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "hono": "^4.13.5",
+    "hono": "^4.13.7",
     "jose": "^6.2.12",
     "zod": "^4.5.4"
   },

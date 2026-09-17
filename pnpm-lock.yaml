@@ -12,11 +12,11 @@ importers:
         specifier: 26.5.x
         version: 26.5.1
       '@types/react':
-        specifier: ^19.2.x
-        version: 19.2.18
+        specifier: ^19.3.x
+        version: 19.3.0
       '@types/react-dom':
         specifier: ^19.3.x
-        version: 19.3.0(@types/react@19.2.18)
+        version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: ^6.1.x
         version: 6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13))
@@ -144,13 +144,13 @@ importers:
         version: 2.1.1
       lucide-react:
         specifier: 1.46.0
-        version: 1.46.0(react@19.2.8)
+        version: 1.46.0(react@19.3.0)
       react:
-        specifier: ^19.2.x
-        version: 19.2.8
+        specifier: ^19.3.x
+        version: 19.3.0
       react-dom:
         specifier: ^19.3.x
-        version: 19.3.0(react@19.2.8)
+        version: 19.3.0(react@19.3.0)
       tailwind-merge:
         specifier: 3.6.0
         version: 3.6.0
@@ -162,11 +162,11 @@ importers:
         specifier: 26.5.x
         version: 26.5.1
       '@types/react':
-        specifier: ^19.2.x
-        version: 19.2.18
+        specifier: ^19.3.x
+        version: 19.3.0
       '@types/react-dom':
         specifier: ^19.3.x
-        version: 19.3.0(@types/react@19.2.18)
+        version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: ^6.1.x
         version: 6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13))
@@ -1211,8 +1211,8 @@ packages:
     peerDependencies:
       '@types/react': ^19.3.0
 
-  '@types/react@19.2.18':
-    resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
+  '@types/react@19.3.0':
+    resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
 
   '@typescript-eslint/eslint-plugin@8.70.0':
     resolution: {integrity: sha512-/v8HZt6RlyIZxB3ntehELOcUcfxKPVGWXnQdJuHRmzrqgF8nQypcC/oxGW+Ot4VGKDq81XugPKxx0n5PBtf9PA==}
@@ -1946,8 +1946,8 @@ packages:
     peerDependencies:
       react: ^19.3.0
 
-  react@19.2.8:
-    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
+  react@19.3.0:
+    resolution: {integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==}
     engines: {node: '>=0.10.0'}
 
   rolldown@1.2.5:
@@ -2889,11 +2889,11 @@ snapshots:
     dependencies:
       undici-types: 8.9.0
 
-  '@types/react-dom@19.3.0(@types/react@19.2.18)':
+  '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
-  '@types/react@19.2.18':
+  '@types/react@19.3.0':
     dependencies:
       csstype: 3.2.3
 
@@ -3522,9 +3522,9 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lucide-react@1.46.0(react@19.2.8):
+  lucide-react@1.46.0(react@19.3.0):
     dependencies:
-      react: 19.2.8
+      react: 19.3.0
 
   magic-string@0.30.21:
     dependencies:
@@ -3615,12 +3615,12 @@ snapshots:
     dependencies:
       hookified: 2.2.0
 
-  react-dom@19.3.0(react@19.2.8):
+  react-dom@19.3.0(react@19.3.0):
     dependencies:
-      react: 19.2.8
+      react: 19.3.0
       scheduler: 0.28.0
 
-  react@19.2.8: {}
+  react@19.3.0: {}
 
   rolldown@1.2.5:
     dependencies:

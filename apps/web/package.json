@@ -12,14 +12,14 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "1.46.0",
-    "react": "^19.2.x",
+    "react": "^19.3.x",
     "react-dom": "^19.3.x",
     "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.x",
     "@types/node": "26.5.x",
-    "@types/react": "^19.2.x",
+    "@types/react": "^19.3.x",
     "@types/react-dom": "^19.3.x",
     "@vitejs/plugin-react": "^6.1.x",
     "terser": "^5.51.x",

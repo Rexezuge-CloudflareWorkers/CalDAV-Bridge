@@ -16,7 +16,7 @@
   "devDependencies": {
     "@types/node": "26.5.x",
     "@types/react": "^19.2.x",
-    "@types/react-dom": "^19.2.x",
+    "@types/react-dom": "^19.3.x",
     "@vitejs/plugin-react": "^6.1.x",
     "@vitest/coverage-v8": "^4.1.x",
     "eslint": "^10.10.x",

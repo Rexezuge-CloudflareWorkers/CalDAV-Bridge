@@ -19,7 +19,7 @@
     "@types/react-dom": "^19.3.x",
     "@vitejs/plugin-react": "^6.1.x",
     "@vitest/coverage-v8": "^4.1.x",
-    "eslint": "^10.10.x",
+    "eslint": "^10.11.x",
     "eslint-config-prettier": "^10.1.x",
     "eslint-plugin-prettier": "^5.5.x",
     "eslint-plugin-react-hooks": "^7.1.x",

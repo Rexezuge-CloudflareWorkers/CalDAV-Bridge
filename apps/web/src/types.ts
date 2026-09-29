@@ -3,6 +3,9 @@ export type ProviderId = 'google-calendar' | 'microsoft-outlook-calendar';
 export type ApplicationStatus = 'draft' | 'connected' | 'error';
 
 export interface CurrentUser {
+  /** Stable account id. Survives an email address change. */
+  userId: string;
+  /** The account's current sign-in address. */
   email: string;
   limits: {
     maxApplicationsPerUser: number;

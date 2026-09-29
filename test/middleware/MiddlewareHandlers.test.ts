@@ -6,6 +6,12 @@ const { getAuthenticatedUserEmail, upsertUser } = vi.hoisted(() => ({
   upsertUser: vi.fn(),
 }));
 
+const IDENTITY = {
+  userId: '11111111-1111-4111-8111-111111111111',
+  currentEmail: 'user@example.test',
+  anchorEmail: 'user@example.test',
+};
+
 vi.mock('@caldav-bridge/backend-services/auth', () => ({
   EmailValidationUtil: { getAuthenticatedUserEmail },
 }));
@@ -19,9 +25,9 @@ vi.mock('@caldav-bridge/backend-services/user', () => ({
 import { MiddlewareHandlers } from '@/middleware';
 
 describe('MiddlewareHandlers', () => {
-  it('authenticates users, upserts them, and continues', async () => {
+  it('authenticates users, resolves them to an account, and continues', async () => {
     getAuthenticatedUserEmail.mockResolvedValue('user@example.test');
-    upsertUser.mockResolvedValue(undefined);
+    upsertUser.mockResolvedValue(IDENTITY);
     const set = vi.fn();
     const next = vi.fn();
     const context = fakeContext(set);
@@ -30,8 +36,22 @@ describe('MiddlewareHandlers', () => {
 
     expect(getAuthenticatedUserEmail).toHaveBeenCalledOnce();
     expect(upsertUser).toHaveBeenCalledWith('user@example.test');
-    expect(set).toHaveBeenCalledWith('AuthenticatedUserEmailAddress', 'user@example.test');
+    // The resolved identity is what handlers read: the id to authorize against
+    // and the address to display, neither taken from the raw request.
+    expect(set).toHaveBeenCalledWith('AuthenticatedUser', IDENTITY);
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("exposes the account's current address, not the one presented", async () => {
+    // The user changed their address, so the old one still authenticates them
+    // through Cloudflare Access but must not be what the UI reports.
+    getAuthenticatedUserEmail.mockResolvedValue('moved@example.test');
+    upsertUser.mockResolvedValue({ ...IDENTITY, currentEmail: 'moved@example.test' });
+    const set = vi.fn();
+
+    await MiddlewareHandlers.userAuthentication()(fakeContext(set), vi.fn());
+
+    expect(set).toHaveBeenCalledWith('AuthenticatedUser', { ...IDENTITY, currentEmail: 'moved@example.test' });
   });
 
   it('maps client authentication failures to JSON errors', async () => {

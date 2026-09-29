@@ -10,6 +10,7 @@ interface OAuth2AccessTokenEnv {
   AES_ENCRYPTION_KEY_SECRET: SecretsStoreSecret;
   OAUTH2_TOKEN_CACHE: KVNamespace;
   OAUTH2_ACCESS_TOKEN_FALLBACK_TTL_SECONDS?: string | undefined;
+  OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS?: string | undefined;
 }
 
 class OAuth2AccessTokenService {
@@ -29,9 +30,7 @@ class OAuth2AccessTokenService {
       credentials: application.credentials,
     });
     if (result.refreshToken) await applicationDAO.updateOAuth2RefreshToken(applicationId, result.refreshToken);
-    const fallbackTtl = ConfigurationManager.getOAuth2AccessTokenFallbackTtlSeconds(env);
-    const ttl = Math.max(60, (result.expiresIn || fallbackTtl) - 60);
-    await env.OAUTH2_TOKEN_CACHE.put(OAuth2AccessTokenService.cacheKey(applicationId), result.accessToken, { expirationTtl: ttl });
+    await OAuth2AccessTokenService.cache(applicationId, result.accessToken, result.expiresIn, env);
     return result.accessToken;
   }
 
@@ -59,9 +58,23 @@ class OAuth2AccessTokenService {
       result.refreshToken || application.credentials.refreshToken || '',
       profile.emailAddress,
     );
-    const fallbackTtl = ConfigurationManager.getOAuth2AccessTokenFallbackTtlSeconds(env);
-    await env.OAUTH2_TOKEN_CACHE.put(OAuth2AccessTokenService.cacheKey(applicationId), result.accessToken, {
-      expirationTtl: Math.max(60, (result.expiresIn || fallbackTtl) - 60),
+    await OAuth2AccessTokenService.cache(applicationId, result.accessToken, result.expiresIn, env);
+  }
+
+  /**
+   * Cache a token for less than its lifetime.
+   *
+   * The margin is the point: a token must be refreshed *before* it expires, not
+   * after a request has already presented it to a provider and been rejected.
+   * Both call sites computed this inline and hardcoded the 60-second margin, so
+   * `OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS` -- which was declared in
+   * `wrangler.template.jsonc` -- changed nothing when it was edited.
+   */
+  private static async cache(applicationId: string, accessToken: string, expiresIn: number | undefined, env: OAuth2AccessTokenEnv): Promise<void> {
+    const fallbackTtl = ConfigurationManager.oauth2.getAccessTokenFallbackTtlSeconds(env);
+    const margin = ConfigurationManager.oauth2.getAccessTokenMinValidSeconds(env);
+    await env.OAUTH2_TOKEN_CACHE.put(OAuth2AccessTokenService.cacheKey(applicationId), accessToken, {
+      expirationTtl: Math.max(margin, (expiresIn || fallbackTtl) - margin),
     });
   }
 

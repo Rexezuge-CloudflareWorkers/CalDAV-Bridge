@@ -10,6 +10,7 @@ import {
   DEFAULT_MAX_CALDAV_CREDENTIALS_PER_APPLICATION,
   DEFAULT_MAX_CALDAV_CREDENTIAL_EXPIRY_DAYS,
   DEFAULT_OAUTH2_ACCESS_TOKEN_FALLBACK_TTL_SECONDS,
+  DEFAULT_OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS,
   DEFAULT_OAUTH2_STATE_EXPIRY_MINUTES,
 } from '@caldav-bridge/shared/constants';
 import { EnvParser } from './EnvParser';
@@ -22,6 +23,17 @@ class ConfigurationManager {
       EnvParser.positiveInt(env, 'OAUTH2_STATE_EXPIRY_MINUTES', DEFAULT_OAUTH2_STATE_EXPIRY_MINUTES),
     getAccessTokenFallbackTtlSeconds: (env: unknown): number =>
       EnvParser.positiveInt(env, 'OAUTH2_ACCESS_TOKEN_FALLBACK_TTL_SECONDS', DEFAULT_OAUTH2_ACCESS_TOKEN_FALLBACK_TTL_SECONDS),
+    /**
+     * How much life must be left on a token for it to be worth caching.
+     *
+     * The cached TTL is shortened by this margin, so a token is refreshed
+     * *before* it expires rather than after a request has already presented it.
+     * It was declared as a variable in `wrangler.template.jsonc` and then
+     * hardcoded as `Math.max(60, …)` at both call sites, so changing the deployed
+     * configuration had no effect at all.
+     */
+    getAccessTokenMinValidSeconds: (env: unknown): number =>
+      EnvParser.positiveInt(env, 'OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS', DEFAULT_OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS),
   };
 
   public static readonly limits = {
@@ -52,19 +64,15 @@ class ConfigurationManager {
       EnvParser.nonNegativeInt(env, 'DB_CLEANUP_EMPTY_USER_RETENTION_DAYS', DEFAULT_DB_CLEANUP_EMPTY_USER_RETENTION_DAYS),
   };
 
-  // ─── Flat API ────────────────────────────────────────────────────────────────
-
-  public static getMaxApplicationsPerUser(env: unknown): number {
-    return this.limits.getMaxApplicationsPerUser(env);
-  }
+  /**
+   * Whether the API worker serves the built SPA itself.
+   *
+   * Not in a namespace group: it answers "should this route exist at all", which
+   * is a question about the deployment rather than about one of the domains
+   * above.
+   */
   public static getServeSpaFromWorker(env: unknown): boolean {
     return EnvParser.boolean(env, 'SERVE_SPA_FROM_WORKER', 'false');
-  }
-  public static getOauth2StateExpiryMinutes(env: unknown): number {
-    return this.oauth2.getStateExpiryMinutes(env);
-  }
-  public static getOAuth2AccessTokenFallbackTtlSeconds(env: unknown): number {
-    return this.oauth2.getAccessTokenFallbackTtlSeconds(env);
   }
 }
 

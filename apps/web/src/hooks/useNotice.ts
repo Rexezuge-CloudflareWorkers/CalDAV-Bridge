@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { NOTICE_TIMEOUT_MS } from '../lib/constants';
-import type { Notice, NoticeType } from '../contexts/NoticeContext';
+import type { Notice, NoticeType } from '../notices';
 
 function getInitialNotice(): Notice | null {
   const params = new URLSearchParams(globalThis.location.search);

@@ -12,4 +12,3 @@ export { RequestEntityTooLargeError } from './RequestEntityTooLargeError';
 export { ServiceUnavailableError } from './ServiceUnavailableError';
 export { UnauthorizedError } from './UnauthorizedError';
 export { UnsupportedMediaTypeError } from './UnsupportedMediaTypeError';
-export type { ErrorResponse } from './model/ErrorResponse';

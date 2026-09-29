@@ -5,8 +5,6 @@ import { NoticeBar } from './components/layout/NoticeBar';
 import { ApplicationsView } from './components/views/ApplicationsView';
 import { ConnectView } from './components/views/ConnectView';
 import { ApplicationDetailView } from './components/views/ApplicationDetailView';
-import { NoticeContext } from './contexts/NoticeContext';
-import { UserContext } from './contexts/UserContext';
 import { useNotice } from './hooks/useNotice';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { useRouting } from './hooks/useRouting';
@@ -136,62 +134,58 @@ export default function SpaApp() {
   if (!authorized || !user) return <Unauthorized />;
 
   return (
-    <NoticeContext.Provider value={{ showNotice }}>
-      <UserContext.Provider value={user}>
-        <div className="min-h-screen bg-[var(--color-surface-base)] text-[var(--color-text-primary)]">
-          <Header route={route} onNavigate={navigate} userEmail={user.email} />
+    <div className="min-h-screen bg-[var(--color-surface-base)] text-[var(--color-text-primary)]">
+      <Header route={route} onNavigate={navigate} userEmail={user.email} />
 
-          {notice && <NoticeBar notice={notice} />}
+      {notice && <NoticeBar notice={notice} />}
 
-          <main className="max-w-7xl mx-auto px-6 py-8">
-            {route.page === 'applications' && (
-              <ApplicationsView
-                user={user}
-                applications={applications.applications}
-                onConnect={() => navigate({ page: 'connect' })}
-                onOpen={(applicationId) => navigate({ page: 'details', applicationId })}
-              />
-            )}
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {route.page === 'applications' && (
+          <ApplicationsView
+            user={user}
+            applications={applications.applications}
+            onConnect={() => navigate({ page: 'connect' })}
+            onOpen={(applicationId) => navigate({ page: 'details', applicationId })}
+          />
+        )}
 
-            {route.page === 'connect' && (
-              <ConnectView
-                displayName={applications.displayName}
-                setDisplayName={applications.setDisplayName}
-                providerId={applications.providerId}
-                setProviderId={applications.setProviderId}
-                clientId={applications.clientId}
-                setClientId={applications.setClientId}
-                clientSecret={applications.clientSecret}
-                setClientSecret={applications.setClientSecret}
-                onSubmit={() => void handleSave()}
-                onCancel={() => navigate({ page: 'applications' })}
-                submitting={submitting}
-              />
-            )}
+        {route.page === 'connect' && (
+          <ConnectView
+            displayName={applications.displayName}
+            setDisplayName={applications.setDisplayName}
+            providerId={applications.providerId}
+            setProviderId={applications.setProviderId}
+            clientId={applications.clientId}
+            setClientId={applications.setClientId}
+            clientSecret={applications.clientSecret}
+            setClientSecret={applications.setClientSecret}
+            onSubmit={() => void handleSave()}
+            onCancel={() => navigate({ page: 'applications' })}
+            submitting={submitting}
+          />
+        )}
 
-            {route.page === 'details' && (
-              <ApplicationDetailView
-                user={user}
-                application={selectedApplication}
-                credentials={details.credentials}
-                calendars={details.calendars}
-                credentialName={details.credentialName}
-                setCredentialName={details.setCredentialName}
-                newUsername={details.newUsername}
-                newPassword={details.newPassword}
-                confirmDelete={details.confirmDelete}
-                setConfirmDelete={details.setConfirmDelete}
-                onBack={() => navigate({ page: 'applications' })}
-                onReconnect={() => void handleOAuth2()}
-                onGenerate={() => void handleGenerate()}
-                onConfirmDelete={() => void handleConfirmDelete()}
-                generating={generating || isBusy}
-                reconnecting={reconnecting}
-              />
-            )}
-          </main>
-        </div>
-      </UserContext.Provider>
-    </NoticeContext.Provider>
+        {route.page === 'details' && (
+          <ApplicationDetailView
+            user={user}
+            application={selectedApplication}
+            credentials={details.credentials}
+            calendars={details.calendars}
+            credentialName={details.credentialName}
+            setCredentialName={details.setCredentialName}
+            newUsername={details.newUsername}
+            newPassword={details.newPassword}
+            confirmDelete={details.confirmDelete}
+            setConfirmDelete={details.setConfirmDelete}
+            onBack={() => navigate({ page: 'applications' })}
+            onReconnect={() => void handleOAuth2()}
+            onGenerate={() => void handleGenerate()}
+            onConfirmDelete={() => void handleConfirmDelete()}
+            generating={generating || isBusy}
+            reconnecting={reconnecting}
+          />
+        )}
+      </main>
+    </div>
   );
 }

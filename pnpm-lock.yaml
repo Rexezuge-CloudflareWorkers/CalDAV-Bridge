@@ -92,12 +92,6 @@ importers:
       hono:
         specifier: ^4.13.8
         version: 4.13.8
-      jose:
-        specifier: ^6.2.12
-        version: 6.2.12
-      zod:
-        specifier: ^4.6.5
-        version: 4.6.5
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -111,18 +105,12 @@ importers:
       '@caldav-bridge/backend-data':
         specifier: workspace:*
         version: link:../../packages/backend-data
-      '@caldav-bridge/backend-errors':
-        specifier: workspace:*
-        version: link:../../packages/backend-errors
       '@caldav-bridge/backend-runtime':
         specifier: workspace:*
         version: link:../../packages/backend-runtime
       '@caldav-bridge/backend-services':
         specifier: workspace:*
         version: link:../../packages/backend-services
-      '@caldav-bridge/provider-clients':
-        specifier: workspace:*
-        version: link:../../packages/provider-clients
       '@caldav-bridge/shared':
         specifier: workspace:*
         version: link:../../packages/shared

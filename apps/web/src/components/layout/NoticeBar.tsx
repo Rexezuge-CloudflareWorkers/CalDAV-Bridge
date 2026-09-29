@@ -1,4 +1,4 @@
-import type { Notice } from '../../contexts/NoticeContext';
+import type { Notice } from '../../notices';
 
 export function NoticeBar({ notice }: { notice: Notice }) {
   return (

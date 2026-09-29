@@ -4,9 +4,19 @@ import { DatabaseError } from '@caldav-bridge/backend-errors';
 import { BaseDAO } from '@caldav-bridge/backend-data/dao/BaseDAO';
 import { asD1Queryable, countingD1Queryable } from '../helpers/d1';
 import { applyMigrations } from '../helpers/migrations';
+import type { D1Queryable } from '@caldav-bridge/backend-data/utils';
 
-/** A DAO that exposes the shared plumbing directly, so it can be tested on its own. */
+/**
+ * A DAO that exposes the shared plumbing directly, so it can be tested on its own.
+ *
+ * `BaseDAO`'s own constructor is protected, since in production it is only ever
+ * reached through a concrete subclass. This is that subclass.
+ */
 class ProbeDAO extends BaseDAO {
+  constructor(database: D1Queryable) {
+    super(database);
+  }
+
   public async readMissingTable(): Promise<unknown> {
     return this.first('SELECT * FROM a_table_that_does_not_exist');
   }

@@ -7,7 +7,9 @@ export function ConnectionDetails({ application }: { application: ConnectedAppli
     <div className="grid gap-6 md:grid-cols-[minmax(180px,0.55fr)_minmax(0,1fr)]">
       <div>
         <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">Connection Details</h2>
-        <p className="text-sm text-[var(--color-text-secondary)]">Use These Values When Configuring The OAuth Provider And CalDAV Client.</p>
+        <p className="text-sm text-[var(--color-text-secondary)]">
+          Use These Values When Configuring The OAuth Provider And CalDAV Client.
+        </p>
       </div>
       <div className="grid gap-4 min-w-0">
         <div className="grid gap-1 pb-4 border-b border-[var(--color-border)]">

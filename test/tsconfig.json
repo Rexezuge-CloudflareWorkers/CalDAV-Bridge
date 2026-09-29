@@ -1,7 +1,33 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "jsx": "react-jsx",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    // Mirrors the aliases in `vitest.config.mts`, so a specifier that resolves at
+    // runtime also resolves for the compiler. Without this a type error in a
+    // test would only surface in an editor, never in `pnpm typecheck`. Paths are
+    // relative to this file, which is why they start with `../`.
+    "paths": {
+      "@/*": ["../apps/api/src/*"],
+      "~/*": ["../apps/web/src/*"],
+      "@caldav-bridge/background": ["../apps/background/src"],
+      "@caldav-bridge/background/*": ["../apps/background/src/*"],
+      "@caldav-bridge/backend-data": ["../packages/backend-data/src"],
+      "@caldav-bridge/backend-data/*": ["../packages/backend-data/src/*"],
+      "@caldav-bridge/backend-errors": ["../packages/backend-errors/src"],
+      "@caldav-bridge/backend-errors/*": ["../packages/backend-errors/src/*"],
+      "@caldav-bridge/backend-runtime": ["../packages/backend-runtime/src"],
+      "@caldav-bridge/backend-runtime/*": ["../packages/backend-runtime/src/*"],
+      "@caldav-bridge/backend-services": ["../packages/backend-services/src"],
+      "@caldav-bridge/backend-services/*": ["../packages/backend-services/src/*"],
+      "@caldav-bridge/provider-clients": ["../packages/provider-clients/src"],
+      "@caldav-bridge/provider-clients/*": ["../packages/provider-clients/src/*"],
+      "@caldav-bridge/shared": ["../packages/shared/src"],
+      "@caldav-bridge/shared/*": ["../packages/shared/src/*"]
+    }
   },
-  "include": ["./**/*.ts"]
+  // The generated Workers bindings are ambient globals, so the tests that
+  // construct a fake `Env` need them in scope exactly as the workers do.
+  "include": ["./**/*.ts", "./**/*.tsx", "../worker-configuration.d.ts", "../apps/api/src/env.d.ts"]
 }

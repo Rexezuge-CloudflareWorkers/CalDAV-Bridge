@@ -3,13 +3,7 @@ import { ConnectionBadge } from '../ui/Badge';
 import type { ConnectedApplication } from '../../types';
 import { providerLabels } from '../../types';
 
-export function ApplicationCard({
-  application,
-  onOpen,
-}: {
-  application: ConnectedApplication;
-  onOpen: () => void;
-}) {
+export function ApplicationCard({ application, onOpen }: { application: ConnectedApplication; onOpen: () => void }) {
   return (
     <button
       type="button"

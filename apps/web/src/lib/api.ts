@@ -36,32 +36,46 @@ export async function readJson<T>(response: Response): Promise<T> {
 
 export function formatTimestamp(timestampSeconds: number | null | undefined): string {
   if (timestampSeconds === null || timestampSeconds === undefined) return 'Never';
-  const date = new Date(timestampSeconds * 1000);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60_000);
+  const diffMins = minutesSince(timestampSeconds);
   if (diffMins < 1) return 'Just now';
   if (diffMins < 60) return `${diffMins}m ago`;
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
+  return new Date(timestampSeconds * 1000).toLocaleDateString();
 }
 
+/**
+ * How long until a credential expires, or how long ago it did.
+ *
+ * The expired case is handled explicitly rather than falling out of the
+ * comparisons below. `diffMins` is negative for a past timestamp, and the
+ * "expires soon" test is `diffMins < 1` -- so an already-expired credential
+ * matched it and was reported as expiring shortly, which is the one thing a
+ * user checking an expired credential is not being told.
+ */
 export function formatExpiryTimestamp(timestampSeconds: number | null | undefined): string {
   if (timestampSeconds === null || timestampSeconds === undefined) return 'Never';
-  const date = new Date(timestampSeconds * 1000);
-  const now = new Date();
-  const diffMs = date.getTime() - now.getTime();
-  const diffMins = Math.floor(diffMs / 60_000);
+  const diffMins = minutesUntil(timestampSeconds);
+  if (diffMins < 0) return 'Expired';
   if (diffMins < 1) return 'Expires soon';
   if (diffMins < 60) return `Expires in ${diffMins}m`;
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) return `Expires in ${diffHours}h`;
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 30) return `Expires in ${diffDays}d`;
-  return `Expires ${date.toLocaleDateString()}`;
+  return `Expires ${new Date(timestampSeconds * 1000).toLocaleDateString()}`;
+}
+
+/** Whole minutes since a Unix-seconds timestamp. */
+function minutesSince(timestampSeconds: number): number {
+  return Math.floor((Date.now() - timestampSeconds * 1000) / 60_000);
+}
+
+/** Whole minutes until a Unix-seconds timestamp; negative once it has passed. */
+function minutesUntil(timestampSeconds: number): number {
+  return Math.floor((timestampSeconds * 1000 - Date.now()) / 60_000);
 }
 
 function getFetchPath(input: Parameters<typeof fetch>[0]): string {

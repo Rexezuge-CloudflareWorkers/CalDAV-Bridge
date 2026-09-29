@@ -56,10 +56,16 @@ export function ApplicationDetailView({
     <section className="grid gap-3 animate-fade-in-up">
       <Card className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:px-4 sm:py-3.5">
         <div className="min-w-0">
-          <button type="button" onClick={onBack} className="w-fit mb-2 -ml-2 px-2 py-1 rounded-lg text-sm bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-primary)] transition-colors">
+          <button
+            type="button"
+            onClick={onBack}
+            className="w-fit mb-2 -ml-2 px-2 py-1 rounded-lg text-sm bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-primary)] transition-colors"
+          >
             Back To Applications
           </button>
-          <p className="text-xs font-bold tracking-widest uppercase text-[var(--color-accent)] mb-1">{providerLabels[application.providerId]}</p>
+          <p className="text-xs font-bold tracking-widest uppercase text-[var(--color-accent)] mb-1">
+            {providerLabels[application.providerId]}
+          </p>
           <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text-primary)] break-words">{application.displayName}</h1>
           <p className="text-sm text-[var(--color-text-secondary)] mt-1">{application.providerEmail || 'OAuth Is Not Connected Yet.'}</p>
         </div>
@@ -88,11 +94,7 @@ export function ApplicationDetailView({
       </div>
 
       {confirmDelete && typeof document !== 'undefined' && (
-        <ConfirmDeleteModal
-          displayName={confirmDelete.name}
-          onConfirm={onConfirmDelete}
-          onCancel={() => setConfirmDelete(null)}
-        />
+        <ConfirmDeleteModal displayName={confirmDelete.name} onConfirm={onConfirmDelete} onCancel={() => setConfirmDelete(null)} />
       )}
     </section>
   );

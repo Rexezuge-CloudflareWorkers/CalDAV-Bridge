@@ -100,7 +100,7 @@ describe('CalDAV sync round trip', () => {
 
   it('keeps a depth-one PROPFIND token consistent with the objects it returns', async () => {
     setProviderEvents([event('provider-1', 'one')]);
-    const response = await davRequest(env, 'PROPFIND', COLLECTION, { Depth: '1', body: allPropBody() });
+    const response = await davRequest(env, 'PROPFIND', COLLECTION, { depth: '1', body: allPropBody() });
     const body = await response.text();
 
     expect(response.status).toBe(207);

@@ -11,7 +11,10 @@ export function CalendarsSection({ calendars }: { calendars: ProviderCalendar[] 
       {calendars.length ? (
         <div className="grid gap-2 max-h-[17rem] overflow-auto pr-0.5">
           {calendars.map((calendar) => (
-            <div key={calendar.id} className="grid gap-1 min-w-0 p-3 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)]">
+            <div
+              key={calendar.id}
+              className="grid gap-1 min-w-0 p-3 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)]"
+            >
               <strong className="break-words text-sm text-[var(--color-text-primary)]">{calendar.name}</strong>
               <small className="text-xs text-[var(--color-text-secondary)]">
                 {calendar.timeZone || 'Provider Timezone'} {calendar.readOnly ? '· Read-Only' : ''}

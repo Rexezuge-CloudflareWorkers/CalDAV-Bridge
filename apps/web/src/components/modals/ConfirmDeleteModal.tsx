@@ -21,10 +21,24 @@ export function ConfirmDeleteModal({
           Delete <span className="font-medium text-[var(--color-text-primary)]">{displayName}</span>? This Cannot Be Undone.
         </p>
         <div className="flex gap-3">
-          <Button variant="ghost" className="flex-1" onClick={(e) => { e.stopPropagation(); onCancel(); }}>
+          <Button
+            variant="ghost"
+            className="flex-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancel();
+            }}
+          >
             Cancel
           </Button>
-          <Button variant="danger" className="flex-1" onClick={(e) => { e.stopPropagation(); onConfirm(); }}>
+          <Button
+            variant="danger"
+            className="flex-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              onConfirm();
+            }}
+          >
             Delete
           </Button>
         </div>

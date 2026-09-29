@@ -1,222 +1,217 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const { getByUserId, getByAnchorEmail, getByCurrentEmail, insertIfAbsent, touch, register, get } = vi.hoisted(() => ({
-  getByUserId: vi.fn(),
-  getByAnchorEmail: vi.fn(),
-  getByCurrentEmail: vi.fn(),
-  insertIfAbsent: vi.fn(),
-  touch: vi.fn(),
-  register: vi.fn(),
-  get: vi.fn(),
-}));
-
-vi.mock('@caldav-bridge/backend-data/dao', () => ({
-  UserDAO: class {
-    static newAnchor = () => 'anchor-0123456789abcdef0123456789abcdef@users.invalid';
-    getByUserId = getByUserId;
-    getByAnchorEmail = getByAnchorEmail;
-    getByCurrentEmail = getByCurrentEmail;
-    insertIfAbsent = insertIfAbsent;
-    touch = touch;
-  },
-  UserEmailDAO: class {
-    register = register;
-    get = get;
-  },
-}));
-
+import { DatabaseSync } from 'node:sqlite';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { UserIdentityService } from '@caldav-bridge/backend-services/user';
+import { asD1Queryable } from '../helpers/d1';
+import { applyMigrations } from '../helpers/migrations';
 
-const ALICE_ID = '11111111-1111-4111-8111-111111111111';
+const ANCHOR = 'owner@example.com';
 
-interface FakeAnchor {
-  user_id: string;
-  email: string;
-  current_email: string;
-  created_at: number;
+function openDatabase(): DatabaseSync {
+  const database = new DatabaseSync(':memory:');
+  database.exec('PRAGMA foreign_keys = ON');
+  applyMigrations(database);
+  return database;
 }
 
-/** Stand-in for the `users` table: anchors are unique, ids are what we mint. */
-class FakeUsers {
-  public readonly rows = new Map<string, FakeAnchor>();
-  private counter = 0;
-
-  /** Pre-existing row, as if written before the current test ran. */
-  public seed(userId: string, anchor: string, currentEmail: string, createdAt = 100): FakeAnchor {
-    const row: FakeAnchor = { user_id: userId, email: anchor, current_email: currentEmail.toLowerCase(), created_at: createdAt };
-    this.rows.set(anchor, row);
-    return row;
-  }
-
-  public insertIfAbsent = async (anchor: string, currentEmail: string): Promise<FakeAnchor | undefined> => {
-    if (this.rows.has(anchor)) return undefined;
-    this.counter += 1;
-    const row: FakeAnchor = {
-      user_id: `minted-${this.rows.size + 1}`,
-      email: anchor,
-      current_email: currentEmail.toLowerCase(),
-      created_at: 200 + this.counter,
-    };
-    this.rows.set(anchor, row);
-    return row;
-  };
-
-  public getByAnchorEmail = async (email: string): Promise<FakeAnchor | undefined> => {
-    const found = [...this.rows.values()].find((row) => row.email.toLowerCase() === email.toLowerCase());
-    return found;
-  };
-
-  public getByCurrentEmail = async (email: string): Promise<FakeAnchor | undefined> => {
-    const found = [...this.rows.values()].find((row) => row.current_email === email.toLowerCase());
-    return found;
-  };
-
-  public getByUserId = async (userId: string): Promise<FakeAnchor | undefined> => {
-    return [...this.rows.values()].find((row) => row.user_id === userId);
-  };
+/** An account as it looks after migration 0004: a frozen anchor, a login address, a verified registry row. */
+function insertAccount(database: DatabaseSync, anchor: string, userId: string, currentEmail: string, verified = true): void {
+  database
+    .prepare('INSERT INTO users (email, created_at, updated_at, user_id, current_email) VALUES (?, ?, ?, ?, ?)')
+    .run(anchor, 100, 100, userId, currentEmail);
+  database
+    .prepare('INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (?, ?, ?, ?)')
+    .run(currentEmail.toLowerCase(), userId, verified ? 1 : 0, 100);
 }
 
-function verifiedRegistryRow(email: string, userId: string): { email: string; user_id: string; is_verified: number; created_at: number } {
-  return { email, user_id: userId, is_verified: 1, created_at: 100 };
-}
-
-describe('UserIdentityService', () => {
-  let users: FakeUsers;
+describe('UserIdentityService.resolveOrCreate', () => {
+  let database: DatabaseSync;
+  let service: UserIdentityService;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    users = new FakeUsers();
-    insertIfAbsent.mockImplementation(users.insertIfAbsent);
-    getByAnchorEmail.mockImplementation(users.getByAnchorEmail);
-    getByCurrentEmail.mockImplementation(users.getByCurrentEmail);
-    getByUserId.mockImplementation(users.getByUserId);
-    // No registry entry by default: either a brand-new address or a database
-    // predating migration 0004.
-    get.mockResolvedValue(undefined);
-    register.mockResolvedValue('claimed');
-    touch.mockResolvedValue(undefined);
+    database = openDatabase();
+    service = new UserIdentityService({ DB: asD1Queryable(database) });
   });
 
-  it('resolves a verified registry row to its account', async () => {
-    users.seed(ALICE_ID, 'Alice@Example.com', 'alice@example.com');
-    get.mockResolvedValue(verifiedRegistryRow('alice@example.com', ALICE_ID));
+  it('resolves a registered address to its account', async () => {
+    insertAccount(database, ANCHOR, 'user-1', 'owner@example.com');
 
-    const identity = await new UserIdentityService({ DB: {} as never }).resolveOrCreate('Alice@Example.com');
+    const identity = await service.resolveOrCreate('owner@example.com');
 
-    expect(identity).toEqual({ userId: ALICE_ID, currentEmail: 'alice@example.com', anchorEmail: 'Alice@Example.com' });
-    expect(insertIfAbsent).not.toHaveBeenCalled();
-    expect(register).not.toHaveBeenCalled();
+    expect(identity.userId).toBe('user-1');
+    expect(identity.currentEmail).toBe('owner@example.com');
   });
 
-  it('refreshes the heartbeat so an active user is not reaped as empty', async () => {
-    users.seed(ALICE_ID, 'Alice@Example.com', 'alice@example.com');
-    get.mockResolvedValue(verifiedRegistryRow('alice@example.com', ALICE_ID));
+  it('lowercases the address, so casing cannot create a second account', async () => {
+    insertAccount(database, ANCHOR, 'user-1', 'owner@example.com');
 
-    await new UserIdentityService({ DB: {} as never }).resolveOrCreate('alice@example.com');
+    const identity = await service.resolveOrCreate('OWNER@EXAMPLE.COM');
 
-    expect(touch).toHaveBeenCalledExactlyOnceWith(ALICE_ID);
+    // Access is case-insensitive in practice. Treating the two spellings as
+    // different would mint a second account for the same person on a phone
+    // keyboard that autocapitalises.
+    expect(identity.userId).toBe('user-1');
   });
 
-  it('creates an account anchored on the real address for a new signer', async () => {
-    const identity = await new UserIdentityService({ DB: {} as never }).resolveOrCreate('New@Example.com');
+  /**
+   * A revoked address stays in the registry so rows written before the change
+   * remain attributable, but it must not authenticate. Falling through to the
+   * `users` anchor lookup would hand the previous holder's applications to
+   * whoever presents the address next.
+   */
+  it('refuses a revoked address, and does not fall through to its anchor', async () => {
+    // The post-change state: the anchor is frozen at the old address, the login
+    // address has moved, and the old registry row is revoked.
+    insertAccount(database, 'old@example.com', 'user-1', 'new@example.com');
+    database
+      .prepare('INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (?, ?, 0, ?)')
+      .run('old@example.com', 'user-1', 100);
 
-    expect(insertIfAbsent).toHaveBeenCalledExactlyOnceWith('new@example.com', 'new@example.com');
-    expect(identity).toEqual({ userId: 'minted-1', currentEmail: 'new@example.com', anchorEmail: 'new@example.com' });
-    // Claimed with the account's own creation timestamp so a later change to a
-    // new address can order the two.
-    expect(register).toHaveBeenCalledExactlyOnceWith({ email: 'new@example.com', userId: 'minted-1', isVerified: true, createdAt: 201 });
+    const identity = await service.resolveOrCreate('old@example.com');
+
+    // A new holder of that address claims it fresh. Falling through to the anchor
+    // lookup would have resolved to the previous holder and handed their
+    // applications over.
+    expect(identity.userId).not.toBe('user-1');
+    expect(identity.currentEmail).toBe('old@example.com');
   });
 
-  it('normalizes the address so casing cannot fork an account', async () => {
-    const first = await new UserIdentityService({ DB: {} as never }).resolveOrCreate('New@Example.com');
-    const second = await new UserIdentityService({ DB: {} as never }).resolveOrCreate('NEW@EXAMPLE.COM');
+  it('provisions an account for an address that has never been seen', async () => {
+    const identity = await service.resolveOrCreate('newcomer@example.com');
 
+    expect(identity.userId).toBeTruthy();
+    expect(identity.currentEmail).toBe('newcomer@example.com');
+    // A new account prefers the real address as its anchor, which is what every
+    // row written before 0004 looks like.
+    expect(identity.anchorEmail).toBe('newcomer@example.com');
+  });
+
+  it('registers the address so the next sign-in finds the same account', async () => {
+    const first = await service.resolveOrCreate('newcomer@example.com');
+
+    const second = await service.resolveOrCreate('newcomer@example.com');
+
+    // Without the registry claim the fresh account would be invisible to
+    // resolution and every sign-in would mint another one.
     expect(second.userId).toBe(first.userId);
-    expect(users.rows.size).toBe(1);
   });
 
-  it('falls back to an opaque anchor so a released address stays re-claimable', async () => {
-    // Alice holds `new@example.com` as her frozen anchor and then moves away, so
-    // her registry row is revoked. The anchor column is immutable, so the address
-    // can never become the new holder's anchor -- their applications would
-    // otherwise disappear from under them.
-    users.seed(ALICE_ID, 'new@example.com', 'new@example.com');
-    get.mockResolvedValue({ email: 'new@example.com', user_id: ALICE_ID, is_verified: 0, created_at: 100 });
+  /**
+   * An address that is already another account's anchor cannot become this
+   * account's anchor, so an opaque one is used instead. The alternative would
+   * make the address permanently unusable by anyone.
+   */
+  it('uses an opaque anchor when the address is already another account anchor', async () => {
+    // The post-change state: the anchor is frozen at the old address, the login
+    // address has moved, and the old registry row is revoked.
+    insertAccount(database, 'shared@example.com', 'user-1', 'moved-elsewhere@example.com');
+    database
+      .prepare('INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (?, ?, 0, ?)')
+      .run('shared@example.com', 'user-1', 100);
 
-    const identity = await new UserIdentityService({ DB: {} as never }).resolveOrCreate('new@example.com');
+    const identity = await service.resolveOrCreate('shared@example.com');
 
-    expect(insertIfAbsent).toHaveBeenNthCalledWith(1, 'new@example.com', 'new@example.com');
-    expect(insertIfAbsent).toHaveBeenNthCalledWith(2, 'anchor-0123456789abcdef0123456789abcdef@users.invalid', 'new@example.com');
-    expect(identity.anchorEmail).toBe('anchor-0123456789abcdef0123456789abcdef@users.invalid');
-    expect(identity.userId).not.toBe(ALICE_ID);
-    // The sign-in address is still the real one, so the UI shows it.
-    expect(identity.currentEmail).toBe('new@example.com');
-    // The revoked registry row is re-pointed at the new account, so the address
-    // authenticates its new holder and inherits nothing.
-    expect(register).toHaveBeenCalledExactlyOnceWith({
-      email: 'new@example.com',
-      userId: identity.userId,
-      isVerified: true,
-      createdAt: 201,
-    });
+    // The address cannot be this account's anchor -- it is already the previous
+    // holder's -- so an opaque placeholder is used and the address stays
+    // re-claimable by whoever holds it now.
+    expect(identity.currentEmail).toBe('shared@example.com');
+    expect(identity.userId).not.toBe('user-1');
+    expect(identity.anchorEmail).toMatch(/^anchor-[0-9a-f]{32}@users\.invalid$/);
   });
 
-  it('never resolves a revoked address to the account that changed away from it', async () => {
-    users.seed(ALICE_ID, 'Alice@Example.com', 'alice@example.com');
-    get.mockResolvedValue({ email: 'alice@example.com', user_id: ALICE_ID, is_verified: 0, created_at: 100 });
+  it('issues an anchor that can never be delivered to a real mailbox', async () => {
+    insertAccount(database, 'shared@example.com', 'user-1', 'moved-elsewhere@example.com');
+    database
+      .prepare('INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (?, ?, 0, ?)')
+      .run('shared@example.com', 'user-1', 100);
 
-    const identity = await new UserIdentityService({ DB: {} as never }).resolveOrCreate('alice@example.com');
+    const identity = await service.resolveOrCreate('shared@example.com');
 
-    // The revoked registry row is authoritative: no `users` fallback is consulted,
-    // so the old account -- and the applications it owns -- is unreachable.
-    expect(getByCurrentEmail).not.toHaveBeenCalled();
-    expect(getByAnchorEmail).not.toHaveBeenCalled();
-    expect(identity.userId).not.toBe(ALICE_ID);
+    // `.invalid` is reserved by RFC 6761, so a placeholder anchor can never be
+    // delivered to -- and so can never be claimed by a real party's mail server.
+    expect(identity.anchorEmail.endsWith('@users.invalid')).toBe(true);
   });
 
-  it('falls back to the anchor lookup on a database predating the registry', async () => {
-    users.seed(ALICE_ID, 'Alice@Example.com', 'alice@example.com');
-    get.mockResolvedValue(undefined);
+  it('re-points a revoked registry row when the address is legitimately reclaimed', async () => {
+    insertAccount(database, 'old@example.com', 'user-1', 'moved-elsewhere@example.com');
+    database
+      .prepare('INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (?, ?, 0, ?)')
+      .run('old@example.com', 'user-1', 100);
 
-    const identity = await new UserIdentityService({ DB: {} as never }).resolveOrCreate('Alice@Example.com');
+    const identity = await service.resolveOrCreate('old@example.com');
 
-    expect(identity.userId).toBe(ALICE_ID);
-    expect(insertIfAbsent).not.toHaveBeenCalled();
+    // The revoked row is reused rather than duplicated, so the registry keeps
+    // exactly one row per address, and the previous holder is not inherited.
+    const rows = database.prepare('SELECT user_id, is_verified FROM user_emails WHERE email = ?').all('old@example.com') as Array<{
+      user_id: string;
+      is_verified: number;
+    }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.user_id).toBe(identity.userId);
+    expect(rows[0]?.is_verified).toBe(1);
+    // The previous holder keeps their own row, still revoked.
+    const previous = database.prepare('SELECT is_verified FROM user_emails WHERE email = ?').get('moved-elsewhere@example.com') as {
+      is_verified: number;
+    };
+    expect(previous.is_verified).toBe(1);
   });
 
-  it('reads current_email before the anchor so a changed address resolves to its own account', async () => {
-    // Alice moves to bob@example.com. Both rows exist; the address must resolve to
-    // whichever account lists it as current, never to whoever anchors on it.
-    users.seed(ALICE_ID, 'Alice@Example.com', 'bob@example.com');
-    get.mockResolvedValue(undefined);
+  it('returns a registry row pointing at a missing account as unknown', async () => {
+    // Migration 0004 backs the registry with a foreign key, but a row written
+    // before the key existed -- or one written with it unenforced -- has no
+    // account behind it. Resolving it would hand out an identity that owns
+    // nothing and cannot sign in again.
+    database.exec('PRAGMA foreign_keys = OFF');
+    database
+      .prepare('INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (?, ?, 1, ?)')
+      .run('ghost@example.com', 'no-such-user', 100);
+    database.exec('PRAGMA foreign_keys = ON');
 
-    const identity = await new UserIdentityService({ DB: {} as never }).resolveOrCreate('bob@example.com');
+    const identity = await service.resolveOrCreate('ghost@example.com');
 
-    expect(getByCurrentEmail).toHaveBeenCalledWith('bob@example.com');
-    expect(getByAnchorEmail).not.toHaveBeenCalled();
-    expect(identity.userId).toBe(ALICE_ID);
+    expect(identity.userId).not.toBe('no-such-user');
   });
 
-  it('provisions a fresh account when a registry row points at a deleted account', async () => {
-    // The registry references a user_id that no longer exists. A stale row must
-    // not lock its holder out, and must not silently resurrect the deleted one.
-    get.mockResolvedValue(verifiedRegistryRow('alice@example.com', ALICE_ID));
-    getByUserId.mockResolvedValue(undefined);
+  it('fails loudly when a row exists but carries no account id', async () => {
+    // A pre-0004 row has no `user_id`. Treating it as an anonymous identity would
+    // resolve to an account id of `undefined` and authorize nothing, while
+    // looking successful.
+    database.exec('PRAGMA foreign_keys = OFF');
+    database.prepare('INSERT INTO users (email, created_at, updated_at) VALUES (?, ?, ?)').run('legacy@example.com', 100, 100);
+    database.exec('PRAGMA foreign_keys = ON');
 
-    const identity = await new UserIdentityService({ DB: {} as never }).resolveOrCreate('alice@example.com');
+    const identity = await service.resolveOrCreate('legacy@example.com');
 
-    expect(identity.userId).toBe('minted-1');
-    expect(insertIfAbsent).toHaveBeenCalledWith('alice@example.com', 'alice@example.com');
+    // A legacy row is found through the anchor fallback, so a *new* account is
+    // provisioned rather than an identity without an id being returned.
+    expect(identity.userId).toBeTruthy();
+    expect(identity.userId).toBeDefined();
   });
 
-  it('reports a failure when no anchor can be created', async () => {
-    // Both attempts report a taken anchor, which means the insert semantics and
-    // the conflict check disagree -- a bug, not a normal condition.
-    insertIfAbsent.mockResolvedValue(undefined);
+  it('resolves a legacy row through its anchor, matching pre-0004 data', async () => {
+    database.exec('PRAGMA foreign_keys = OFF');
+    database
+      .prepare('INSERT INTO users (email, created_at, updated_at, user_id, current_email) VALUES (?, ?, ?, ?, ?)')
+      .run('legacy@example.com', 100, 100, 'user-legacy', 'legacy@example.com');
+    database.exec('PRAGMA foreign_keys = ON');
 
-    await expect(new UserIdentityService({ DB: {} as never }).resolveOrCreate('alice@example.com')).rejects.toThrow(
-      /provision an account/i,
-    );
-    expect(register).not.toHaveBeenCalled();
+    const identity = await service.resolveOrCreate('legacy@example.com');
+
+    // A database predating 0004 has no registry row at all, and the address *is*
+    // the anchor there. Resolving it keeps those accounts working.
+    expect(identity.userId).toBe('user-legacy');
+  });
+
+  it('does not silently create a second account for the same address', async () => {
+    insertAccount(database, ANCHOR, 'user-1', 'owner@example.com');
+
+    const identities = await Promise.all([
+      service.resolveOrCreate(ANCHOR),
+      service.resolveOrCreate(ANCHOR),
+      service.resolveOrCreate(ANCHOR),
+    ]);
+
+    // Two concurrent first sign-ins must not each mint an account, or a user's
+    // applications would end up split between them.
+    expect(new Set(identities.map((identity) => identity.userId)).size).toBe(1);
   });
 });

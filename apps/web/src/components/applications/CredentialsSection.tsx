@@ -38,7 +38,12 @@ export function CredentialsSection({
       </CardHeader>
 
       <div className="flex items-center gap-2">
-        <Input value={credentialName} onChange={(event) => setCredentialName(event.target.value)} placeholder="Desktop Calendar" aria-label="Credential Name" />
+        <Input
+          value={credentialName}
+          onChange={(event) => setCredentialName(event.target.value)}
+          placeholder="Desktop Calendar"
+          aria-label="Credential Name"
+        />
         <Button onClick={onGenerate} loading={generating} className="shrink-0">
           Generate
         </Button>
@@ -46,8 +51,14 @@ export function CredentialsSection({
 
       {newPassword && (
         <div className="mt-4 p-3 rounded-lg bg-[var(--color-info-bg)] grid gap-1.5 max-h-32 overflow-auto">
-          <span className="text-sm"><strong className="text-[var(--color-text-primary)]">New Username: </strong><code className="text-[var(--color-info-text)] break-all">{newUsername}</code></span>
-          <span className="text-sm"><strong className="text-[var(--color-text-primary)]">New Password: </strong><code className="text-[var(--color-info-text)] break-all">{newPassword}</code></span>
+          <span className="text-sm">
+            <strong className="text-[var(--color-text-primary)]">New Username: </strong>
+            <code className="text-[var(--color-info-text)] break-all">{newUsername}</code>
+          </span>
+          <span className="text-sm">
+            <strong className="text-[var(--color-text-primary)]">New Password: </strong>
+            <code className="text-[var(--color-info-text)] break-all">{newPassword}</code>
+          </span>
         </div>
       )}
 
@@ -68,10 +79,20 @@ export function CredentialsSection({
               {credentials.map((credential) => (
                 <tr key={credential.credentialId} className="border-t border-[var(--color-border)]">
                   <td className="py-2 pr-2 text-sm align-top">{credential.name}</td>
-                  <td className="py-2 pr-2 align-top"><code className="text-[var(--color-success-text)] break-all text-xs">{credential.username}</code></td>
-                  <td className="py-2 pr-2 align-top"><code className="text-[var(--color-success-text)] text-xs">{credential.passwordPrefix}...{credential.passwordLastFour}</code></td>
-                  <td className="py-2 pr-2 text-sm text-[var(--color-text-secondary)] align-top whitespace-nowrap">{formatExpiryTimestamp(credential.expiresAt)}</td>
-                  <td className="py-2 pr-2 text-sm text-[var(--color-text-secondary)] align-top whitespace-nowrap">{formatTimestamp(credential.lastUsedAt)}</td>
+                  <td className="py-2 pr-2 align-top">
+                    <code className="text-[var(--color-success-text)] break-all text-xs">{credential.username}</code>
+                  </td>
+                  <td className="py-2 pr-2 align-top">
+                    <code className="text-[var(--color-success-text)] text-xs">
+                      {credential.passwordPrefix}...{credential.passwordLastFour}
+                    </code>
+                  </td>
+                  <td className="py-2 pr-2 text-sm text-[var(--color-text-secondary)] align-top whitespace-nowrap">
+                    {formatExpiryTimestamp(credential.expiresAt)}
+                  </td>
+                  <td className="py-2 pr-2 text-sm text-[var(--color-text-secondary)] align-top whitespace-nowrap">
+                    {formatTimestamp(credential.lastUsedAt)}
+                  </td>
                   <td className="py-2 align-top">
                     <Button variant="danger" size="sm" onClick={() => onDelete(credential)}>
                       Delete

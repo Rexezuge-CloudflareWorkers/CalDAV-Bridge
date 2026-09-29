@@ -1,5 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite';
 
+import type { D1Queryable as ProductionD1Queryable } from '@caldav-bridge/backend-data/utils';
+
+/**
+ * The `D1Queryable` a DAO accepts, re-exported so a test can name it without
+ * importing the production module directly.
+ */
+type D1Queryable = ProductionD1Queryable;
+
 /** The slice of the D1 prepared-statement surface the DAOs rely on. */
 interface D1LikeStatement {
   bind(...bindings: unknown[]): D1LikeStatement;
@@ -106,4 +114,5 @@ function countingD1Queryable(database: DatabaseSync): CountingQueryable {
 }
 
 export { asD1Queryable, countingD1Queryable };
+export type { CountingQueryable };
 export type { D1Queryable };

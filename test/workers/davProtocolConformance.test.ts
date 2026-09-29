@@ -50,7 +50,7 @@ describe('DAV protocol conformance', () => {
 
       const response = await dav(env, 'PROPFIND', COLLECTION, {
         depth: 'infinity',
-        body: '<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>',
+        body: allPropBody(),
       });
       const body = await response.text();
 
@@ -210,7 +210,118 @@ describe('DAV protocol conformance', () => {
       expect(body.match(/<D:response>/g)?.length).toBeLessThanOrEqual(256);
     });
   });
+
+  /**
+   * The credential is the only thing authorising a DAV request, so every way of
+   * presenting a bad one has to end in a challenge rather than in data. The
+   * malformed-header case is the one most likely to differ between clients, and
+   * decoding it with `atob` unguarded threw a `DOMException` that surfaced as a
+   * 500 rather than a challenge.
+   */
+  describe('credential handling', () => {
+    it('challenges a request with no authorization header', async () => {
+      provider.setEvents([event('provider-1')]);
+
+      const response = await rawDavRequest(env, 'PROPFIND', COLLECTION, { body: allPropBody() });
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get('WWW-Authenticate')).toContain('Basic');
+    });
+
+    it('challenges a non-Basic scheme', async () => {
+      const response = await rawDavRequest(env, 'PROPFIND', COLLECTION, {
+        body: allPropBody(),
+        headers: { Authorization: 'Bearer some-token' },
+      });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('challenges a header that is not valid base64', async () => {
+      const response = await rawDavRequest(env, 'PROPFIND', COLLECTION, {
+        body: allPropBody(),
+        headers: { Authorization: 'Basic !!!not-base64!!!' },
+      });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('challenges a credential with no password', async () => {
+      const response = await rawDavRequest(env, 'PROPFIND', COLLECTION, {
+        body: allPropBody(),
+        headers: { Authorization: `Basic ${btoa('username-only:')}` },
+      });
+
+      // An empty password must never authenticate, whatever the username is.
+      expect(response.status).toBe(401);
+    });
+
+    it('challenges a credential with no username', async () => {
+      const response = await rawDavRequest(env, 'PROPFIND', COLLECTION, {
+        body: allPropBody(),
+        headers: { Authorization: `Basic ${btoa(':password-only')}` },
+      });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('challenges a wrong password', async () => {
+      provider.setEvents([event('provider-1')]);
+
+      const response = await rawDavRequest(env, 'PROPFIND', COLLECTION, {
+        body: allPropBody(),
+        headers: { Authorization: `Basic ${btoa(`${USERNAME}:wrong-password`)}` },
+      });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('refuses a credential presented on another application path', async () => {
+      provider.setEvents([event('provider-1')]);
+
+      // A credential is bound to its application, so presenting a valid one on a
+      // different path must not be accepted.
+      const response = await rawDavRequest(env, 'PROPFIND', '/dav/calendars/some-other-app/', {
+        body: allPropBody(),
+        headers: { Authorization: `Basic ${btoa(`${USERNAME}:${PASSWORD}`)}` },
+      });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('records the use of a credential that did authenticate', async () => {
+      provider.setEvents([event('provider-1')]);
+      const row = database.prepare('SELECT credential_id, last_used_at FROM caldav_credentials LIMIT 1').get() as {
+        credential_id: string;
+        last_used_at: number | null;
+      };
+
+      await dav(env, 'PROPFIND', COLLECTION, { body: allPropBody() });
+
+      // Last use is the only signal an operator has about which credentials are
+      // still in rotation.
+      const after = database.prepare('SELECT last_used_at FROM caldav_credentials WHERE credential_id = ?').get(row.credential_id) as {
+        last_used_at: number | null;
+      };
+      expect(row.last_used_at).toBeNull();
+      expect(after.last_used_at).toBeGreaterThan(0);
+    });
+  });
 });
+
+/** A DAV request with fully caller-controlled headers, for the auth cases. */
+function rawDavRequest(
+  env: Env,
+  method: string,
+  path: string,
+  options: { body?: string; headers?: Record<string, string> } = {},
+): Promise<Response> {
+  return new CalDavBridgeWorker().fetch(
+    new Request(`${WORKER_URL}${path}`, { method, headers: options.headers ?? {}, body: options.body }),
+    env,
+    {} as ExecutionContext,
+  );
+}
 
 async function dav(
   env: Env,
@@ -237,6 +348,11 @@ async function dav(
  * is the conventional "I have no state" marker, which parses to an absent token
  * and so begins a sync.
  */
+/** A `PROPFIND` asking for every property, which is what a client populating a view sends. */
+function allPropBody(): string {
+  return '<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>';
+}
+
 function syncCollection(syncToken?: string): string {
   const token = syncToken === undefined ? '<D:sync-token/>' : `<D:sync-token>${syncToken}</D:sync-token>`;
   return `<D:sync-collection xmlns:D="DAV:"><D:sync>${token}</D:sync><D:sync-level>1</D:sync-level><D:prop><D:getetag/></D:prop></D:sync-collection>`;

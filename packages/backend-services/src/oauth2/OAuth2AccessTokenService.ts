@@ -70,7 +70,12 @@ class OAuth2AccessTokenService {
    * `OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS` -- which was declared in
    * `wrangler.template.jsonc` -- changed nothing when it was edited.
    */
-  private static async cache(applicationId: string, accessToken: string, expiresIn: number | undefined, env: OAuth2AccessTokenEnv): Promise<void> {
+  private static async cache(
+    applicationId: string,
+    accessToken: string,
+    expiresIn: number | undefined,
+    env: OAuth2AccessTokenEnv,
+  ): Promise<void> {
     const fallbackTtl = ConfigurationManager.oauth2.getAccessTokenFallbackTtlSeconds(env);
     const margin = ConfigurationManager.oauth2.getAccessTokenMinValidSeconds(env);
     await env.OAUTH2_TOKEN_CACHE.put(OAuth2AccessTokenService.cacheKey(applicationId), accessToken, {

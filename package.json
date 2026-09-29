@@ -5,15 +5,18 @@
   "scripts": {
     "postinstall": "node scripts/ensure-spa-shell-stub.mjs && pnpm run typegen",
     "build": "pnpm -r build",
-    "checks": "pnpm -r typecheck && pnpm run lint && pnpm run test",
+    "checks": "pnpm -r typecheck && pnpm run typecheck:test && pnpm run lint && pnpm run test",
     "prettier": "prettier --write .",
     "typecheck": "pnpm -r typecheck",
+    "typecheck:test": "tsc -p test/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint --ext .ts,.tsx --fix .",
     "typegen": "wrangler types --config ./apps/api/wrangler.template.jsonc --env-interface CloudflareEnv"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "26.6.x",
     "@types/react": "^19.3.x",
     "@types/react-dom": "^19.3.x",
@@ -24,6 +27,7 @@
     "eslint-plugin-prettier": "^5.5.x",
     "eslint-plugin-react-hooks": "^7.1.x",
     "globals": "^17.12.x",
+    "happy-dom": "^20.14.5",
     "jsonc-parser": "^3.3.1",
     "prettier": "^3.9.x",
     "tailwindcss": "^4.3.x",

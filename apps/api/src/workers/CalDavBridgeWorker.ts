@@ -4,13 +4,20 @@ import { DURABLE_OBJECT_CRON_TASKS_RUN_URL, DURABLE_OBJECT_NAMESPACE_GLOBAL } fr
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { createD1SessionEnv } from '@caldav-bridge/backend-data/utils';
 import { CalDavCredentialDAO, CalendarObjectMappingDAO } from '@caldav-bridge/backend-data/dao';
-import { BadRequestError, MethodNotAllowedError, PreconditionFailedError, ServiceError, UnauthorizedError } from '@caldav-bridge/backend-errors';
+import {
+  BadRequestError,
+  MethodNotAllowedError,
+  PreconditionFailedError,
+  ServiceError,
+  UnauthorizedError,
+} from '@caldav-bridge/backend-errors';
 import { ApplicationService } from '@caldav-bridge/backend-services/application';
 import type { CreateApplicationInput } from '@caldav-bridge/backend-services/application';
 import { CalDavUtil, CalendarService, ICalendarUtil } from '@caldav-bridge/backend-services/calendar';
 import { CredentialService } from '@caldav-bridge/backend-services/credential';
 import { OAuth2AuthorizationService } from '@caldav-bridge/backend-services/oauth2';
 import { UserService } from '@caldav-bridge/backend-services/user';
+import type { UserIdentity } from '@caldav-bridge/backend-services/user';
 import { BaseUrlUtil, CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
 import { validateRequestInput } from '@caldav-bridge/shared/schema';
 import type { CalendarEvent, ConnectedApplication } from '@caldav-bridge/shared/model';
@@ -19,7 +26,7 @@ import { errorResponse, jsonResponse } from '@caldav-bridge/backend-runtime/http
 import { SPA_HTML } from '@/generated/spa-shell';
 
 type AppBindings = Env;
-type AppVariables = { AuthenticatedUserEmailAddress: string };
+type AppVariables = { AuthenticatedUser: UserIdentity };
 
 const D1_BOOKMARK_HEADER: string = 'x-d1-bookmark';
 
@@ -35,23 +42,25 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
 
     app.use('/user/*', MiddlewareHandlers.userAuthentication());
 
-    app.get('/user/me', async (c) => safe(() => this.getCurrentUser(c.get('AuthenticatedUserEmailAddress'), c.env)));
-    app.get('/user/applications', async (c) => safe(() => this.listApplications(c.get('AuthenticatedUserEmailAddress'), c.req.raw, c.env)));
-    app.post('/user/application', async (c) => safe(() => this.createApplication(c.get('AuthenticatedUserEmailAddress'), c.req.raw, c.env)));
-    app.put('/user/application', async (c) => safe(() => this.updateApplication(c.get('AuthenticatedUserEmailAddress'), c.req.raw, c.env)));
-    app.delete('/user/application', async (c) => safe(() => this.deleteApplication(c.get('AuthenticatedUserEmailAddress'), c.req.raw, c.env)));
+    app.get('/user/me', async (c) => safe(() => this.getCurrentUser(c.get('AuthenticatedUser'), c.env)));
+    app.get('/user/applications', async (c) => safe(() => this.listApplications(c.get('AuthenticatedUser').userId, c.req.raw, c.env)));
+    app.post('/user/application', async (c) => safe(() => this.createApplication(c.get('AuthenticatedUser').userId, c.req.raw, c.env)));
+    app.put('/user/application', async (c) => safe(() => this.updateApplication(c.get('AuthenticatedUser').userId, c.req.raw, c.env)));
+    app.delete('/user/application', async (c) => safe(() => this.deleteApplication(c.get('AuthenticatedUser').userId, c.req.raw, c.env)));
     app.post('/user/application/oauth2/authorize', async (c) =>
-      safe(() => this.createOAuth2Authorization(c.get('AuthenticatedUserEmailAddress'), c.req.raw, c.env)),
+      safe(() => this.createOAuth2Authorization(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
     );
-    app.get('/user/application/calendars', async (c) => safe(() => this.listCalendars(c.get('AuthenticatedUserEmailAddress'), c.req.raw, c.env)));
+    app.get('/user/application/calendars', async (c) =>
+      safe(() => this.listCalendars(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
+    );
     app.get('/user/application/caldav-credentials', async (c) =>
-      safe(() => this.listCalDavCredentials(c.get('AuthenticatedUserEmailAddress'), c.req.raw, c.env)),
+      safe(() => this.listCalDavCredentials(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
     );
     app.post('/user/application/caldav-credential', async (c) =>
-      safe(() => this.createCalDavCredential(c.get('AuthenticatedUserEmailAddress'), c.req.raw, c.env)),
+      safe(() => this.createCalDavCredential(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
     );
     app.delete('/user/application/caldav-credential', async (c) =>
-      safe(() => this.deleteCalDavCredential(c.get('AuthenticatedUserEmailAddress'), c.req.raw, c.env)),
+      safe(() => this.deleteCalDavCredential(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
     );
     app.get('/api/oauth2/callback/:applicationId', async (c) =>
       safe(() => this.oauth2Callback(c.req.raw, c.env, c.req.param('applicationId'))),
@@ -95,7 +104,8 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
       cronTasksStub
         .fetch(cronTasksRequest)
         .then(async (response) => {
-          if (!response.ok && response.status !== 202) console.error('CronTasksWorker returned an error response:', response.status, await response.text());
+          if (!response.ok && response.status !== 202)
+            console.error('CronTasksWorker returned an error response:', response.status, await response.text());
         })
         .catch((error: unknown) => {
           console.error('Failed to invoke CronTasksWorker:', error);
@@ -103,38 +113,47 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     );
   }
 
-  private async getCurrentUser(email: string, env: Env): Promise<Response> {
-    const limits = await new UserService(env).getCurrentUserLimits();
-    return jsonResponse({ email, limits });
+  /**
+   * Reported from the resolved account rather than from the request, so an
+   * address that has since been changed shows up here immediately instead of
+   * echoing the address the caller happens to present.
+   */
+  private async getCurrentUser(identity: UserIdentity, env: Env): Promise<Response> {
+    return jsonResponse(await new UserService(env).getCurrentUser(identity));
   }
 
-  private async listApplications(email: string, request: Request, env: Env): Promise<Response> {
-    const applications = await new ApplicationService(env).listApplications(email, BaseUrlUtil.getBaseUrl(request));
+  private async listApplications(userId: string, request: Request, env: Env): Promise<Response> {
+    const applications = await new ApplicationService(env).listApplications(userId, BaseUrlUtil.getBaseUrl(request));
     return jsonResponse({ applications });
   }
 
-  private async createApplication(email: string, request: Request, env: Env): Promise<Response> {
+  private async createApplication(userId: string, request: Request, env: Env): Promise<Response> {
     const body = await this.validatedBody<CreateApplicationInput>(request);
-    const application = await new ApplicationService(env).createApplication(email, body, BaseUrlUtil.getBaseUrl(request));
+    const application = await new ApplicationService(env).createApplication(userId, body, BaseUrlUtil.getBaseUrl(request));
     return jsonResponse({ application });
   }
 
-  private async updateApplication(email: string, request: Request, env: Env): Promise<Response> {
+  private async updateApplication(userId: string, request: Request, env: Env): Promise<Response> {
     const body = await this.validatedBody<CreateApplicationInput & { applicationId: string }>(request);
-    const application = await new ApplicationService(env).updateApplication(email, body.applicationId, body, BaseUrlUtil.getBaseUrl(request));
+    const application = await new ApplicationService(env).updateApplication(
+      userId,
+      body.applicationId,
+      body,
+      BaseUrlUtil.getBaseUrl(request),
+    );
     return jsonResponse({ application });
   }
 
-  private async deleteApplication(email: string, request: Request, env: Env): Promise<Response> {
+  private async deleteApplication(userId: string, request: Request, env: Env): Promise<Response> {
     const body = await this.validatedBody<{ applicationId: string }>(request);
-    await new ApplicationService(env).deleteApplication(email, body.applicationId);
+    await new ApplicationService(env).deleteApplication(userId, body.applicationId);
     return jsonResponse({ success: true });
   }
 
-  private async createOAuth2Authorization(email: string, request: Request, env: Env): Promise<Response> {
+  private async createOAuth2Authorization(userId: string, request: Request, env: Env): Promise<Response> {
     const body = await this.validatedBody<{ applicationId: string }>(request);
     const service = new ApplicationService(env);
-    const application = await service.requireUserApplication(email, body.applicationId);
+    const application = await service.requireUserApplication(userId, body.applicationId);
     return jsonResponse(await new OAuth2AuthorizationService(env).createAuthorization(application, BaseUrlUtil.getBaseUrl(request)));
   }
 
@@ -150,25 +169,25 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     return redirect(result.redirect);
   }
 
-  private async listCalendars(email: string, request: Request, env: Env): Promise<Response> {
-    const application = await this.requireUserApplicationFromQuery(email, request, env);
+  private async listCalendars(userId: string, request: Request, env: Env): Promise<Response> {
+    const application = await this.requireUserApplicationFromQuery(userId, request, env);
     return jsonResponse({ calendars: await new CalendarService(env).listCalendars(application) });
   }
 
-  private async listCalDavCredentials(email: string, request: Request, env: Env): Promise<Response> {
-    const application = await this.requireUserApplicationFromQuery(email, request, env);
+  private async listCalDavCredentials(userId: string, request: Request, env: Env): Promise<Response> {
+    const application = await this.requireUserApplicationFromQuery(userId, request, env);
     return jsonResponse({ credentials: await new CredentialService(env).listCredentials(application.applicationId) });
   }
 
-  private async createCalDavCredential(email: string, request: Request, env: Env): Promise<Response> {
+  private async createCalDavCredential(userId: string, request: Request, env: Env): Promise<Response> {
     const body = await this.validatedBody<{ applicationId: string; name: string; expiresInDays?: number }>(request);
-    const application = await this.requireUserApplication(email, env, body.applicationId);
+    const application = await this.requireUserApplication(userId, env, body.applicationId);
     return jsonResponse(await new CredentialService(env).createCredential(application, body.name, body.expiresInDays));
   }
 
-  private async deleteCalDavCredential(email: string, request: Request, env: Env): Promise<Response> {
+  private async deleteCalDavCredential(userId: string, request: Request, env: Env): Promise<Response> {
     const body = await this.validatedBody<{ applicationId: string; credentialId: string }>(request);
-    const application = await this.requireUserApplication(email, env, body.applicationId);
+    const application = await this.requireUserApplication(userId, env, body.applicationId);
     await new CredentialService(env).deleteCredential(application.applicationId, body.credentialId);
     return jsonResponse({ success: true });
   }
@@ -199,13 +218,17 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
       await calendarService.requireWritableCalendar(application, accessToken, path.calendarId);
       const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
       const liveMapping = mapping?.deletedAt ? undefined : mapping;
-      if (request.headers.get('If-None-Match')?.trim() === '*' && liveMapping) throw new PreconditionFailedError('Calendar object already exists.');
+      if (request.headers.get('If-None-Match')?.trim() === '*' && liveMapping)
+        throw new PreconditionFailedError('Calendar object already exists.');
       if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), liveMapping?.etag || undefined))
         throw new PreconditionFailedError('Calendar object ETag does not match.');
       const event = ICalendarUtil.fromICS(await request.text(), liveMapping?.uid || crypto.randomUUID());
       const saved = await calendarService.upsertEvent(application, accessToken, path.calendarId, event, liveMapping?.providerEventId);
       await mappingDAO.upsert(application.applicationId, path.calendarId, path.objectHref, saved.id || event.uid, saved.uid, saved.etag);
-      return new Response(null, { status: liveMapping ? 204 : 201, headers: { ETag: CalDavUtil.eventEtag(saved), Location: url.pathname } });
+      return new Response(null, {
+        status: liveMapping ? 204 : 201,
+        headers: { ETag: CalDavUtil.eventEtag(saved), Location: url.pathname },
+      });
     }
     if (request.method === 'DELETE') {
       await calendarService.requireWritableCalendar(application, accessToken, path.calendarId);
@@ -241,9 +264,7 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     if (path.resource === 'calendar' && path.calendarId) {
       const calendar = await calendarService.requireCalendar(application, accessToken, path.calendarId);
       const shouldFetchObjects = depth > 0 || this.propfindNeedsCalendarObjects(propfind);
-      const events = shouldFetchObjects
-        ? await calendarService.listEvents(application, accessToken, path.calendarId)
-        : [];
+      const events = shouldFetchObjects ? await calendarService.listEvents(application, accessToken, path.calendarId) : [];
       const synced = shouldFetchObjects
         ? await calendarService.syncProviderSnapshot(mappingDAO, application.applicationId, path.calendarId, events)
         : { live: [], deleted: [] };
@@ -252,7 +273,14 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
         path.calendarId,
         shouldFetchObjects ? await mappingDAO.getMaxSyncVersion(application.applicationId, path.calendarId) : 0,
       );
-      return CalDavUtil.propfindCalendar(application.applicationId, calendar, propfind, depth, [...synced.live, ...synced.deleted], syncToken);
+      return CalDavUtil.propfindCalendar(
+        application.applicationId,
+        calendar,
+        propfind,
+        depth,
+        [...synced.live, ...synced.deleted],
+        syncToken,
+      );
     }
     if (path.resource === 'object' && path.calendarId && path.objectHref) {
       const event = await calendarService.getDavObject(
@@ -333,7 +361,10 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
   }
 
   private propfindNeedsCalendarObjects(propfind: ReturnType<typeof CalDavUtil.parsePropfind>): boolean {
-    return propfind.mode === 'allprop' || (propfind.mode === 'prop' && (propfind.properties.includes('getctag') || propfind.properties.includes('sync-token')));
+    return (
+      propfind.mode === 'allprop' ||
+      (propfind.mode === 'prop' && (propfind.properties.includes('getctag') || propfind.properties.includes('sync-token')))
+    );
   }
 
   private async authenticateDav(request: Request, env: Env, applicationId?: string | undefined): Promise<ConnectedApplication> {
@@ -358,14 +389,14 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     return application;
   }
 
-  private async requireUserApplicationFromQuery(email: string, request: Request, env: Env): Promise<ConnectedApplication> {
+  private async requireUserApplicationFromQuery(userId: string, request: Request, env: Env): Promise<ConnectedApplication> {
     const applicationId = new URL(request.url).searchParams.get('applicationId');
     if (!applicationId) throw new BadRequestError('applicationId is required.');
-    return this.requireUserApplication(email, env, applicationId);
+    return this.requireUserApplication(userId, env, applicationId);
   }
 
-  private async requireUserApplication(email: string, env: Env, applicationId: string): Promise<ConnectedApplication> {
-    return new ApplicationService(env).requireUserApplication(email, applicationId);
+  private async requireUserApplication(userId: string, env: Env, applicationId: string): Promise<ConnectedApplication> {
+    return new ApplicationService(env).requireUserApplication(userId, applicationId);
   }
 
   private async validatedBody<T>(request: Request): Promise<T> {

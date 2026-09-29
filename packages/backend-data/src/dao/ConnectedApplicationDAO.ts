@@ -16,9 +16,8 @@ import { decryptData, encryptData } from '../crypto';
 import { EncryptedDAO } from './BaseDAO';
 
 class ConnectedApplicationDAO extends EncryptedDAO {
-
   public async create(
-    userEmail: string,
+    userId: string,
     displayName: string,
     providerId: string,
     credentials: ConnectedApplicationCredentials,
@@ -26,17 +25,22 @@ class ConnectedApplicationDAO extends EncryptedDAO {
     const now = TimestampUtil.getCurrentUnixTimestampInSeconds();
     const applicationId = UUIDUtil.getRandomUUID();
     const encrypted = await encryptData(JSON.stringify(credentials), this.masterKey);
+    // `user_email` stays the account's frozen anchor because
+    // `connected_applications` carries `FOREIGN KEY (user_email) REFERENCES
+    // users(email)`. Deriving it here rather than taking it as a parameter means
+    // the two keys can never disagree.
     await this.database
       .prepare(
         `
           INSERT INTO connected_applications
-            (application_id, user_email, provider_email, display_name, provider_id, connection_method, encrypted_credentials, credentials_iv, status, last_error, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (application_id, user_id, user_email, provider_email, display_name, provider_id, connection_method, encrypted_credentials, credentials_iv, status, last_error, created_at, updated_at)
+          VALUES (?, ?, (SELECT email FROM users WHERE user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
       )
       .bind(
         applicationId,
-        userEmail,
+        userId,
+        userId,
         null,
         displayName,
         providerId,
@@ -49,57 +53,63 @@ class ConnectedApplicationDAO extends EncryptedDAO {
         now,
       )
       .run();
-    const application = await this.getMetadataByIdForUser(applicationId, userEmail);
+    const application = await this.getMetadataByIdForUser(applicationId, userId);
     if (!application) throw new Error('Failed to load connected application after create.');
     return application;
   }
 
   public async updateForUser(
     applicationId: string,
-    userEmail: string,
+    userId: string,
     displayName: string,
     credentials: ConnectedApplicationCredentials,
   ): Promise<ConnectedApplicationMetadata | undefined> {
     const now = TimestampUtil.getCurrentUnixTimestampInSeconds();
-    const existing = await this.getByIdForUser(applicationId, userEmail);
+    const existing = await this.getByIdForUser(applicationId, userId);
     if (!existing) return undefined;
-    const encrypted = await encryptData(JSON.stringify({ ...credentials, refreshToken: existing.credentials.refreshToken }), this.masterKey);
+    const encrypted = await encryptData(
+      JSON.stringify({ ...credentials, refreshToken: existing.credentials.refreshToken }),
+      this.masterKey,
+    );
     await this.database
       .prepare(
         `
           UPDATE connected_applications
           SET display_name = ?, encrypted_credentials = ?, credentials_iv = ?, updated_at = ?
-          WHERE application_id = ? AND user_email = ?
+          WHERE application_id = ? AND user_id = ?
         `,
       )
-      .bind(displayName, encrypted.encrypted, encrypted.iv, now, applicationId, userEmail)
+      .bind(displayName, encrypted.encrypted, encrypted.iv, now, applicationId, userId)
       .run();
-    return this.getMetadataByIdForUser(applicationId, userEmail);
+    return this.getMetadataByIdForUser(applicationId, userId);
   }
 
-  public async listMetadataByUserEmail(userEmail: string): Promise<ConnectedApplicationMetadata[]> {
+  public async listMetadataByUserId(userId: string): Promise<ConnectedApplicationMetadata[]> {
     const rows = await this.database
       .prepare(
         `
-          SELECT application_id, user_email, provider_email, display_name, provider_id, connection_method, encrypted_credentials, credentials_iv, status, last_error, created_at, updated_at
+          SELECT application_id, user_id, user_email, provider_email, display_name, provider_id, connection_method, encrypted_credentials, credentials_iv, status, last_error, created_at, updated_at
           FROM connected_applications
-          WHERE user_email = ?
+          WHERE user_id = ?
           ORDER BY updated_at DESC, created_at DESC
         `,
       )
-      .bind(userEmail)
+      .bind(userId)
       .all<ConnectedApplicationInternal>()
       .then((result) => result.results || []);
     return rows.map((row) => this.toMetadata(row));
   }
 
-  public async countByUserEmail(userEmail: string): Promise<number> {
-    const row = await this.database.prepare('SELECT COUNT(*) AS count FROM connected_applications WHERE user_email = ?').bind(userEmail).first<{ count: number }>();
+  public async countByUserId(userId: string): Promise<number> {
+    const row = await this.database
+      .prepare('SELECT COUNT(*) AS count FROM connected_applications WHERE user_id = ?')
+      .bind(userId)
+      .first<{ count: number }>();
     return row?.count ?? 0;
   }
 
-  public async getMetadataByIdForUser(applicationId: string, userEmail: string): Promise<ConnectedApplicationMetadata | undefined> {
-    const row = await this.getRowById(applicationId, userEmail);
+  public async getMetadataByIdForUser(applicationId: string, userId: string): Promise<ConnectedApplicationMetadata | undefined> {
+    const row = await this.getRowById(applicationId, userId);
     return row ? this.toMetadata(row) : undefined;
   }
 
@@ -108,8 +118,8 @@ class ConnectedApplicationDAO extends EncryptedDAO {
     return row ? this.toApplication(row) : undefined;
   }
 
-  public async getByIdForUser(applicationId: string, userEmail: string): Promise<ConnectedApplication | undefined> {
-    const row = await this.getRowById(applicationId, userEmail);
+  public async getByIdForUser(applicationId: string, userId: string): Promise<ConnectedApplication | undefined> {
+    const row = await this.getRowById(applicationId, userId);
     return row ? this.toApplication(row) : undefined;
   }
 
@@ -141,8 +151,11 @@ class ConnectedApplicationDAO extends EncryptedDAO {
       .run();
   }
 
-  public async deleteForUser(applicationId: string, userEmail: string): Promise<void> {
-    await this.database.prepare('DELETE FROM connected_applications WHERE application_id = ? AND user_email = ?').bind(applicationId, userEmail).run();
+  public async deleteForUser(applicationId: string, userId: string): Promise<void> {
+    await this.database
+      .prepare('DELETE FROM connected_applications WHERE application_id = ? AND user_id = ?')
+      .bind(applicationId, userId)
+      .run();
   }
 
   public async deleteDraftsUpdatedBefore(cutoff: number, limit: number): Promise<number> {
@@ -171,7 +184,8 @@ class ConnectedApplicationDAO extends EncryptedDAO {
           WHERE application_id IN (
             SELECT application_id
             FROM connected_applications
-            WHERE user_email NOT IN (SELECT email FROM users)
+            WHERE user_id IS NULL
+               OR user_id NOT IN (SELECT user_id FROM users WHERE user_id IS NOT NULL)
             LIMIT ?
           )
         `,
@@ -181,13 +195,13 @@ class ConnectedApplicationDAO extends EncryptedDAO {
     return result.meta?.changes ?? 0;
   }
 
-  private async getRowById(applicationId: string, userEmail?: string): Promise<ConnectedApplicationInternal | undefined> {
-    const whereUser = userEmail ? ' AND user_email = ?' : '';
-    const bindings = userEmail ? [applicationId, userEmail] : [applicationId];
+  private async getRowById(applicationId: string, userId?: string): Promise<ConnectedApplicationInternal | undefined> {
+    const whereUser = userId ? ' AND user_id = ?' : '';
+    const bindings = userId ? [applicationId, userId] : [applicationId];
     const row = await this.database
       .prepare(
         `
-          SELECT application_id, user_email, provider_email, display_name, provider_id, connection_method, encrypted_credentials, credentials_iv, status, last_error, created_at, updated_at
+          SELECT application_id, user_id, user_email, provider_email, display_name, provider_id, connection_method, encrypted_credentials, credentials_iv, status, last_error, created_at, updated_at
           FROM connected_applications
           WHERE application_id = ?${whereUser}
           LIMIT 1
@@ -206,7 +220,7 @@ class ConnectedApplicationDAO extends EncryptedDAO {
   private toMetadata(row: ConnectedApplicationInternal): ConnectedApplicationMetadata {
     return {
       applicationId: row.application_id,
-      userEmail: row.user_email,
+      userId: row.user_id,
       providerEmail: row.provider_email,
       displayName: row.display_name,
       providerId: row.provider_id,

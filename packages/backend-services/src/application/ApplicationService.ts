@@ -19,31 +19,36 @@ interface CreateApplicationInput {
 class ApplicationService {
   constructor(private readonly env: ApplicationServiceEnv) {}
 
-  public async listApplications(email: string, baseUrl: string): Promise<ConnectedApplicationMetadata[]> {
+  public async listApplications(userId: string, baseUrl: string): Promise<ConnectedApplicationMetadata[]> {
     const applicationDAO = await this.applicationDAO();
     const credentialDAO = new CalDavCredentialDAO(this.env.DB);
     return Promise.all(
-      (await applicationDAO.listMetadataByUserEmail(email)).map(async (application) =>
+      (await applicationDAO.listMetadataByUserId(userId)).map(async (application) =>
         this.decorateApplication(baseUrl, application, credentialDAO),
       ),
     );
   }
 
-  public async createApplication(email: string, input: CreateApplicationInput, baseUrl: string): Promise<ConnectedApplicationMetadata> {
+  public async createApplication(userId: string, input: CreateApplicationInput, baseUrl: string): Promise<ConnectedApplicationMetadata> {
     const applicationDAO = await this.applicationDAO();
     const maxApplications = ConfigurationManager.limits.getMaxApplicationsPerUser(this.env);
-    if ((await applicationDAO.countByUserEmail(email)) >= maxApplications)
+    if ((await applicationDAO.countByUserId(userId)) >= maxApplications)
       throw new BadRequestError(`Maximum ${maxApplications} applications allowed per user.`);
-    const application = await applicationDAO.create(email, input.displayName, input.providerId, {
+    const application = await applicationDAO.create(userId, input.displayName, input.providerId, {
       clientId: input.clientId,
       clientSecret: input.clientSecret,
     });
     return this.decorateApplication(baseUrl, application, new CalDavCredentialDAO(this.env.DB));
   }
 
-  public async updateApplication(email: string, applicationId: string, input: CreateApplicationInput, baseUrl: string): Promise<ConnectedApplicationMetadata> {
+  public async updateApplication(
+    userId: string,
+    applicationId: string,
+    input: CreateApplicationInput,
+    baseUrl: string,
+  ): Promise<ConnectedApplicationMetadata> {
     const applicationDAO = await this.applicationDAO();
-    const application = await applicationDAO.updateForUser(applicationId, email, input.displayName, {
+    const application = await applicationDAO.updateForUser(applicationId, userId, input.displayName, {
       clientId: input.clientId,
       clientSecret: input.clientSecret,
     });
@@ -51,12 +56,19 @@ class ApplicationService {
     return this.decorateApplication(baseUrl, application, new CalDavCredentialDAO(this.env.DB));
   }
 
-  public async deleteApplication(email: string, applicationId: string): Promise<void> {
-    await (await this.applicationDAO()).deleteForUser(applicationId, email);
+  public async deleteApplication(userId: string, applicationId: string): Promise<void> {
+    await (await this.applicationDAO()).deleteForUser(applicationId, userId);
   }
 
-  public async requireUserApplication(email: string, applicationId: string): Promise<ConnectedApplication> {
-    const application = await (await this.applicationDAO()).getByIdForUser(applicationId, email);
+  /**
+   * The authorization boundary for every user-scoped resource read and write.
+   *
+   * Ownership is proven by account id, so it holds across an address change --
+   * whereas matching on the address would have silently locked a user out of
+   * their own applications the moment they changed it.
+   */
+  public async requireUserApplication(userId: string, applicationId: string): Promise<ConnectedApplication> {
+    const application = await (await this.applicationDAO()).getByIdForUser(applicationId, userId);
     if (!application) throw new NotFoundError('Connected application was not found.');
     return application;
   }

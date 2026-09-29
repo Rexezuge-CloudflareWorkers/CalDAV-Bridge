@@ -10,7 +10,8 @@ type ConnectedApplicationCredentials = OAuth2Credentials;
 
 interface ConnectedApplicationMetadata {
   applicationId: string;
-  userEmail: string;
+  /** Owning account. Identity is this id, never an address. */
+  userId: string;
   providerEmail?: string | null | undefined;
   displayName: string;
   providerId: ProviderId;
@@ -31,6 +32,13 @@ interface ConnectedApplication extends ConnectedApplicationMetadata {
 
 interface ConnectedApplicationInternal {
   application_id: string;
+  user_id: string;
+  /**
+   * The account's frozen anchor address, kept only to satisfy
+   * `FOREIGN KEY (user_email) REFERENCES users(email)`. Never an identity key and
+   * never updated -- deliberately absent from `ConnectedApplicationMetadata` so
+   * it cannot leak into API responses as display data.
+   */
   user_email: string;
   provider_email: string | null;
   display_name: string;

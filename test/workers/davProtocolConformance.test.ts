@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CalDavBridgeWorker } from '@/workers';
-import { CalDavUtil } from '@caldav-bridge/backend-services/calendar';
+import { DavPathUtil } from '@caldav-bridge/backend-services/calendar';
 import { encryptData } from '@caldav-bridge/backend-data/crypto';
 import { CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
 import { asD1Queryable } from '../helpers/d1';
@@ -72,7 +72,7 @@ describe('DAV protocol conformance', () => {
   describe('sync tokens', () => {
     it('refuses a token issued for a different collection', async () => {
       provider.setEvents([event('provider-1')]);
-      const foreign = CalDavUtil.syncToken(APP, 'some-other-calendar', 5);
+      const foreign = DavPathUtil.syncToken(APP, 'some-other-calendar', 5);
 
       const response = await dav(env, 'REPORT', COLLECTION, { body: syncCollection(foreign) });
 

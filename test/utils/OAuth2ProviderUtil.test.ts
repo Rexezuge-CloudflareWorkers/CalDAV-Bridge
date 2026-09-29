@@ -71,7 +71,9 @@ describe('OAuth2ProviderUtil', () => {
   });
 
   it('exchanges authorization codes with x-www-form-urlencoded PKCE bodies', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ access_token: 'access-token', refresh_token: 'refresh-token', expires_in: '3600' }));
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'access-token', refresh_token: 'refresh-token', expires_in: '3600' }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(
@@ -129,7 +131,9 @@ describe('OAuth2ProviderUtil', () => {
   });
 
   it('maps OAuth2 provider token failures to service error codes', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ error: 'invalid_grant', error_description: 'Bad code' }, 400));
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ error: 'invalid_grant', error_description: 'Bad code' }, 400));
     vi.stubGlobal('fetch', fetchMock);
 
     const tokenError = await OAuth2ProviderUtil.exchangeCode({

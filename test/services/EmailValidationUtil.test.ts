@@ -5,7 +5,9 @@ import { EmailValidationUtil } from '@caldav-bridge/backend-services/auth';
 describe('EmailValidationUtil', () => {
   it('honors the local development bypass', async () => {
     await expect(
-      EmailValidationUtil.getAuthenticatedUserEmail(new Request('https://bridge.example.test/user/me'), { DEV_AUTH_EMAIL: 'dev@example.test' }),
+      EmailValidationUtil.getAuthenticatedUserEmail(new Request('https://bridge.example.test/user/me'), {
+        DEV_AUTH_EMAIL: 'dev@example.test',
+      }),
     ).resolves.toBe('dev@example.test');
   });
 
@@ -14,7 +16,10 @@ describe('EmailValidationUtil', () => {
 
     await expect(EmailValidationUtil.getAuthenticatedUserEmail(request, {})).rejects.toBeInstanceOf(UnauthorizedError);
     await expect(
-      EmailValidationUtil.getAuthenticatedUserEmail(new Request('https://bridge.example.test/user/me', { headers: { 'cf-access-jwt-assertion': 'token' } }), {}),
+      EmailValidationUtil.getAuthenticatedUserEmail(
+        new Request('https://bridge.example.test/user/me', { headers: { 'cf-access-jwt-assertion': 'token' } }),
+        {},
+      ),
     ).rejects.toThrow('TEAM_DOMAIN or POLICY_AUD');
   });
 

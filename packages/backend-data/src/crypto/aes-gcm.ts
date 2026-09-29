@@ -21,13 +21,19 @@ function decodeBase64(value: string): Uint8Array {
 async function encryptData(plaintext: string, masterKey: string): Promise<{ encrypted: string; iv: string }> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTE_LENGTH));
   const key = await importAesKey(masterKey);
-  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: toArrayBuffer(iv) }, key, toArrayBuffer(new TextEncoder().encode(plaintext))));
+  const encrypted = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: toArrayBuffer(iv) }, key, toArrayBuffer(new TextEncoder().encode(plaintext))),
+  );
   return { encrypted: encodeBase64(encrypted), iv: encodeBase64(iv) };
 }
 
 async function decryptData(encrypted: string, iv: string, masterKey: string): Promise<string> {
   const key = await importAesKey(masterKey);
-  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: toArrayBuffer(decodeBase64(iv)) }, key, toArrayBuffer(decodeBase64(encrypted)));
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: toArrayBuffer(decodeBase64(iv)) },
+    key,
+    toArrayBuffer(decodeBase64(encrypted)),
+  );
   return new TextDecoder().decode(decrypted);
 }
 

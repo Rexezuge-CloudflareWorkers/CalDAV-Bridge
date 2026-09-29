@@ -1,40 +1,61 @@
+import { NotFoundError } from '@caldav-bridge/backend-errors';
 import { PROVIDER_GOOGLE_CALENDAR } from '@caldav-bridge/shared/constants';
 import type { ProviderId } from '@caldav-bridge/shared/constants';
 import type { CalendarEvent, ProviderCalendar } from '@caldav-bridge/shared/model';
 import { GoogleCalendarProviderUtil } from './GoogleCalendarProviderUtil';
-import type { CalendarEventRange } from './GoogleCalendarProviderUtil';
 import { OutlookCalendarProviderUtil } from './OutlookCalendarProviderUtil';
+import type { CalendarEventRange, CalendarProvider } from './CalendarProvider';
+
+/**
+ * Provider dispatch.
+ *
+ * The per-provider behaviour lives behind `ICalendarProvider` and is reached
+ * through this table. Callers name a provider; they do not branch on one, so
+ * adding a provider is an entry here rather than an `else` arm in six methods.
+ * The previous ladders also fell through to Outlook for any unrecognised id, so
+ * a typo silently returned the wrong account's data.
+ */
+const PROVIDERS: Readonly<Record<string, CalendarProvider>> = {
+  [PROVIDER_GOOGLE_CALENDAR]: GoogleCalendarProviderUtil,
+  'microsoft-outlook-calendar': OutlookCalendarProviderUtil,
+} satisfies Record<string, CalendarProvider>;
 
 class CalendarProviderUtil {
-  public static async getProfile(providerId: ProviderId | string, accessToken: string): Promise<{ emailAddress: string }> {
-    if (providerId === PROVIDER_GOOGLE_CALENDAR) return GoogleCalendarProviderUtil.getProfile(accessToken);
-    return OutlookCalendarProviderUtil.getProfile(accessToken);
+  public static providerFor(providerId: ProviderId | string): CalendarProvider {
+    const provider = PROVIDERS[providerId];
+    // A `404` naming the id is the only safe answer: silently using the default
+    // provider would read and write the wrong account's calendar.
+    if (!provider) throw new NotFoundError(`No calendar provider is registered for "${providerId}".`);
+    return provider;
   }
 
-  public static async listCalendars(providerId: ProviderId | string, accessToken: string): Promise<ProviderCalendar[]> {
-    if (providerId === PROVIDER_GOOGLE_CALENDAR) return GoogleCalendarProviderUtil.listCalendars(accessToken);
-    return OutlookCalendarProviderUtil.listCalendars(accessToken);
+  public static getProfile(providerId: ProviderId | string, accessToken: string): Promise<{ emailAddress: string }> {
+    return CalendarProviderUtil.providerFor(providerId).getProfile(accessToken);
   }
 
-  public static async listEvents(providerId: ProviderId | string, accessToken: string, calendarId: string, range: CalendarEventRange = {}): Promise<CalendarEvent[]> {
-    if (providerId === PROVIDER_GOOGLE_CALENDAR) {
-      const events = await GoogleCalendarProviderUtil.listEvents(accessToken, calendarId, range);
-      return events.filter((event) => CalendarProviderUtil.eventOverlapsRange(event, range));
-    }
-    const graphEvents = await OutlookCalendarProviderUtil.listRawEvents(accessToken, calendarId);
-    const mappedEvents = graphEvents.map((event) => OutlookCalendarProviderUtil.fromGraphEvent(event));
-    const recurringEventIdsInRange = range.start && range.end
-      ? await OutlookCalendarProviderUtil.listRecurrenceOverrides(accessToken, calendarId, graphEvents, mappedEvents, { start: range.start, end: range.end })
-      : undefined;
-    return mappedEvents.filter((event) => recurringEventIdsInRange?.has(event.id || '') || CalendarProviderUtil.eventOverlapsRange(event, range));
+  public static listCalendars(providerId: ProviderId | string, accessToken: string): Promise<ProviderCalendar[]> {
+    return CalendarProviderUtil.providerFor(providerId).listCalendars(accessToken);
   }
 
-  public static async getEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, eventId: string): Promise<CalendarEvent> {
-    if (providerId === PROVIDER_GOOGLE_CALENDAR) return GoogleCalendarProviderUtil.getEvent(accessToken, calendarId, eventId);
-    return OutlookCalendarProviderUtil.getEvent(accessToken, calendarId, eventId);
+  public static listEvents(
+    providerId: ProviderId | string,
+    accessToken: string,
+    calendarId: string,
+    range: CalendarEventRange = {},
+  ): Promise<CalendarEvent[]> {
+    return CalendarProviderUtil.providerFor(providerId).listEvents(accessToken, calendarId, range);
   }
 
-  public static async upsertEvent(
+  public static getEvent(
+    providerId: ProviderId | string,
+    accessToken: string,
+    calendarId: string,
+    eventId: string,
+  ): Promise<CalendarEvent> {
+    return CalendarProviderUtil.providerFor(providerId).getEvent(accessToken, calendarId, eventId);
+  }
+
+  public static upsertEvent(
     providerId: ProviderId | string,
     accessToken: string,
     calendarId: string,
@@ -42,16 +63,23 @@ class CalendarProviderUtil {
     providerEventId?: string,
     expectedEtag?: string,
   ): Promise<CalendarEvent> {
-    if (providerId === PROVIDER_GOOGLE_CALENDAR)
-      return GoogleCalendarProviderUtil.upsertEvent(accessToken, calendarId, event, providerEventId, expectedEtag);
-    return OutlookCalendarProviderUtil.upsertEvent(accessToken, calendarId, event, providerEventId, expectedEtag);
+    return CalendarProviderUtil.providerFor(providerId).upsertEvent(accessToken, calendarId, event, providerEventId, expectedEtag);
   }
 
-  public static async deleteEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, eventId: string): Promise<void> {
-    if (providerId === PROVIDER_GOOGLE_CALENDAR) return GoogleCalendarProviderUtil.deleteEvent(accessToken, calendarId, eventId);
-    return OutlookCalendarProviderUtil.deleteEvent(accessToken, calendarId, eventId);
+  public static deleteEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, eventId: string): Promise<void> {
+    return CalendarProviderUtil.providerFor(providerId).deleteEvent(accessToken, calendarId, eventId);
   }
 
+  /**
+   * Whether an event falls inside a requested window.
+   *
+   * Unbounded on either side means unbounded on that side, and an event whose
+   * bounds cannot be read is kept rather than dropped: a client asking for a
+   * window should not silently lose an event because a provider sent a date
+   * this could not parse. A recurring series is kept if any of its overrides
+   * falls inside, which is what makes an expanded series survive a bounded
+   * query.
+   */
   public static eventOverlapsRange(event: CalendarEvent, range: CalendarEventRange): boolean {
     if (!range.start && !range.end) return true;
     const eventStart = CalendarProviderUtil.toTime(event.start.dateTime || event.start.date);

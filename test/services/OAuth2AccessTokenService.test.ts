@@ -60,7 +60,9 @@ describe('OAuth2AccessTokenService', () => {
   });
 
   it('refreshes expired tokens and rotates refresh tokens', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(tokenResponse({ access_token: 'new-token', refresh_token: 'rotated', expires_in: 3600 }));
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(tokenResponse({ access_token: 'new-token', refresh_token: 'rotated', expires_in: 3600 }));
     vi.stubGlobal('fetch', fetchMock);
     applicationSpies.getById.mockResolvedValue(application());
     applicationSpies.updateOAuth2RefreshToken.mockResolvedValue(undefined);

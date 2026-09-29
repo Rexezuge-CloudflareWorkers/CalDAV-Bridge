@@ -6,7 +6,10 @@ function getRouteKey(request: Request): string {
   return `${request.method.toUpperCase()} ${pathname}`;
 }
 
-async function validateRequestInput(request: Request, body: unknown): Promise<{ success: true; data: unknown } | { success: false; error: string }> {
+async function validateRequestInput(
+  request: Request,
+  body: unknown,
+): Promise<{ success: true; data: unknown } | { success: false; error: string }> {
   const schema = RequestInputSchemas[getRouteKey(request)];
   if (!schema) return { success: true, data: body };
   const source = request.method.toUpperCase() === 'GET' ? Object.fromEntries(new URL(request.url).searchParams.entries()) : body;

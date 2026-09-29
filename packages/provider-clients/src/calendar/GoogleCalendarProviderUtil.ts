@@ -1,7 +1,10 @@
 import { InternalServerError } from '@caldav-bridge/backend-errors';
 import type { CalendarEvent, ProviderCalendar } from '@caldav-bridge/shared/model';
 import { fetchProviderJson } from './BaseCalendarHttp';
+import { CalendarProviderUtil } from './CalendarProviderUtil';
+import type { CalendarEventRange } from './CalendarProvider';
 
+/** The Google implementation of `ICalendarProvider`, reached only through `CalendarProviderUtil`. */
 class GoogleCalendarProviderUtil {
   public static async getProfile(accessToken: string): Promise<{ emailAddress: string }> {
     const data = await fetchProviderJson<{ email?: string }>('https://www.googleapis.com/oauth2/v2/userinfo', accessToken);
@@ -20,7 +23,14 @@ class GoogleCalendarProviderUtil {
       calendars.push(...(data.items || []));
       pageToken = data.nextPageToken;
     } while (pageToken);
-    return calendars.map((item) => ({ id: item.id, name: item.summary || item.id, description: item.description, timeZone: item.timeZone, readOnly: item.accessRole === 'reader', etag: item.etag }));
+    return calendars.map((item) => ({
+      id: item.id,
+      name: item.summary || item.id,
+      description: item.description,
+      timeZone: item.timeZone,
+      readOnly: item.accessRole === 'reader',
+      etag: item.etag,
+    }));
   }
 
   /**
@@ -50,7 +60,12 @@ class GoogleCalendarProviderUtil {
       events.push(...(data.items || []));
       pageToken = data.nextPageToken;
     } while (pageToken);
-    return GoogleCalendarProviderUtil.regroupRecurringEvents(events.map(GoogleCalendarProviderUtil.fromGoogleEvent));
+    // The API's own `timeMin`/`timeMax` is a hint, not a guarantee -- an event
+    // overlapping the boundary still comes back -- so the window is also applied
+    // here, where a series is judged by any of its occurrences.
+    return GoogleCalendarProviderUtil.regroupRecurringEvents(events.map(GoogleCalendarProviderUtil.fromGoogleEvent)).filter((event) =>
+      CalendarProviderUtil.eventOverlapsRange(event, range),
+    );
   }
 
   /**
@@ -104,15 +119,22 @@ class GoogleCalendarProviderUtil {
    * left alone: the master is already the earliest occurrence.
    */
   private static spanSeries(event: CalendarEvent): CalendarEvent {
-    const ends = (event.overrides ?? []).map((override) => override.end?.dateTime ?? override.end?.date).filter((value): value is string => Boolean(value));
+    const ends = (event.overrides ?? [])
+      .map((override) => override.end?.dateTime ?? override.end?.date)
+      .filter((value): value is string => Boolean(value));
     if (!ends.length) return event;
-    const latest = ends.reduce((furthest, candidate) => (new Date(candidate).getTime() > new Date(furthest).getTime() ? candidate : furthest));
+    const latest = ends.reduce((furthest, candidate) =>
+      new Date(candidate).getTime() > new Date(furthest).getTime() ? candidate : furthest,
+    );
     return { ...event, end: { dateTime: latest, timeZone: 'UTC' } };
   }
 
   public static async getEvent(accessToken: string, calendarId: string, eventId: string): Promise<CalendarEvent> {
     return GoogleCalendarProviderUtil.fromGoogleEvent(
-      await fetchProviderJson<GoogleEvent>(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, accessToken),
+      await fetchProviderJson<GoogleEvent>(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+        accessToken,
+      ),
     );
   }
 
@@ -125,7 +147,13 @@ class GoogleCalendarProviderUtil {
    * read and the client's `PUT` was overwritten with no `412` anywhere -- the
    * client's conditional intent was silently dropped, on their real calendar.
    */
-  public static async upsertEvent(accessToken: string, calendarId: string, event: CalendarEvent, providerEventId?: string, ifEtag?: string): Promise<CalendarEvent> {
+  public static async upsertEvent(
+    accessToken: string,
+    calendarId: string,
+    event: CalendarEvent,
+    providerEventId?: string,
+    ifEtag?: string,
+  ): Promise<CalendarEvent> {
     const url = providerEventId
       ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(providerEventId)}`
       : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
@@ -160,7 +188,9 @@ class GoogleCalendarProviderUtil {
       created: event.created,
       updated: event.updated,
       recurrence: event.recurrence,
-      attendees: event.attendees?.map((attendee) => ({ email: attendee.email, name: attendee.displayName })).filter((attendee) => attendee.email),
+      attendees: event.attendees
+        ?.map((attendee) => ({ email: attendee.email, name: attendee.displayName }))
+        .filter((attendee) => attendee.email),
     };
   }
 
@@ -177,15 +207,42 @@ class GoogleCalendarProviderUtil {
     };
   }
 
-  private static toGoogleReminders(alarms?: CalendarEvent['alarms']): { useDefault: boolean; overrides?: Array<{ method: 'popup'; minutes: number }> } {
+  private static toGoogleReminders(alarms?: CalendarEvent['alarms']): {
+    useDefault: boolean;
+    overrides?: Array<{ method: 'popup'; minutes: number }>;
+  } {
     if (!alarms?.length) return { useDefault: false };
-    return { useDefault: false, overrides: alarms.map((alarm) => ({ method: 'popup' as const, minutes: Math.max(0, Math.trunc(alarm.triggerMinutesBeforeStart)) })) };
+    return {
+      useDefault: false,
+      overrides: alarms.map((alarm) => ({ method: 'popup' as const, minutes: Math.max(0, Math.trunc(alarm.triggerMinutesBeforeStart)) })),
+    };
   }
 }
 
-interface CalendarEventRange { start?: string | undefined; end?: string | undefined }
-interface GoogleCalendar { id: string; summary?: string; description?: string; timeZone?: string; accessRole?: string; etag?: string }
-interface GoogleEvent { id?: string; iCalUID?: string; etag?: string; summary?: string; description?: string; location?: string; status?: string; start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string }; created?: string; updated?: string; recurrence?: string[]; attendees?: Array<{ email: string; displayName?: string }>; reminders?: { useDefault: boolean; overrides?: Array<{ method: 'popup'; minutes: number }> } }
+interface GoogleCalendar {
+  id: string;
+  summary?: string;
+  description?: string;
+  timeZone?: string;
+  accessRole?: string;
+  etag?: string;
+}
+interface GoogleEvent {
+  id?: string;
+  iCalUID?: string;
+  etag?: string;
+  summary?: string;
+  description?: string;
+  location?: string;
+  status?: string;
+  start?: { date?: string; dateTime?: string; timeZone?: string };
+  end?: { date?: string; dateTime?: string; timeZone?: string };
+  created?: string;
+  updated?: string;
+  recurrence?: string[];
+  attendees?: Array<{ email: string; displayName?: string }>;
+  reminders?: { useDefault: boolean; overrides?: Array<{ method: 'popup'; minutes: number }> };
+}
 
 export { GoogleCalendarProviderUtil };
-export type { CalendarEventRange, GoogleCalendar, GoogleEvent };
+export type { GoogleCalendar, GoogleEvent };

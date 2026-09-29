@@ -31,7 +31,9 @@ class ICalendarUtil {
       ICalendarUtil.dateLine('DTSTART', event.start),
       ICalendarUtil.dateLine('DTEND', event.end),
       ...(!isOverride ? event.recurrence || [] : []),
-      ...(event.attendees || []).map((attendee) => `ATTENDEE;CN=${ICalendarUtil.escapeParam(attendee.name || attendee.email)}:mailto:${attendee.email}`),
+      ...(event.attendees || []).map(
+        (attendee) => `ATTENDEE;CN=${ICalendarUtil.escapeParam(attendee.name || attendee.email)}:mailto:${attendee.email}`,
+      ),
       ...(event.alarms || []).flatMap((alarm) => ICalendarUtil.alarmLines(alarm, event.summary)),
       'END:VEVENT',
     ];
@@ -106,7 +108,8 @@ class ICalendarUtil {
 
   private static dateLine(name: string, value: CalendarEvent['start']): string {
     if (value.date) return `${name};VALUE=DATE:${value.date.replace(/-/g, '')}`;
-    if (value.timeZone && value.timeZone !== 'UTC') return `${name};TZID=${ICalendarUtil.escapeParamValue(value.timeZone)}:${ICalendarUtil.toLocalStamp(value.dateTime || new Date().toISOString())}`;
+    if (value.timeZone && value.timeZone !== 'UTC')
+      return `${name};TZID=${ICalendarUtil.escapeParamValue(value.timeZone)}:${ICalendarUtil.toLocalStamp(value.dateTime || new Date().toISOString())}`;
     return `${name}:${ICalendarUtil.toUtcStamp(value.dateTime || new Date().toISOString())}`;
   }
 
@@ -226,7 +229,10 @@ class ICalendarUtil {
   }
 
   private static toUtcStamp(value: string): string {
-    return new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    return new Date(value)
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\.\d{3}Z$/, 'Z');
   }
 
   private static fromUtcStamp(value: string): string {
@@ -251,7 +257,11 @@ class ICalendarUtil {
   }
 
   private static escape(value: string): string {
-    return value.replace(/\\/g, '\\\\').replace(/\r\n|\r|\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+    return value
+      .replace(/\\/g, '\\\\')
+      .replace(/\r\n|\r|\n/g, '\\n')
+      .replace(/,/g, '\\,')
+      .replace(/;/g, '\\;');
   }
 
   private static unescape(value: string): string {
@@ -259,7 +269,10 @@ class ICalendarUtil {
   }
 
   private static escapeParam(value: string): string {
-    return `"${value.replace(/\^/g, '^^').replace(/\r\n|\r|\n/g, '^n').replace(/"/g, "^'")}"`;
+    return `"${value
+      .replace(/\^/g, '^^')
+      .replace(/\r\n|\r|\n/g, '^n')
+      .replace(/"/g, "^'")}"`;
   }
 
   private static escapeParamValue(value: string): string {

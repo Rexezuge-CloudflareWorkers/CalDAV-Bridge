@@ -5,7 +5,13 @@ import type { D1Queryable } from '../utils';
 class OAuth2AuthorizationSessionDAO {
   constructor(private readonly database: D1Queryable) {}
 
-  public async create(applicationId: string, stateHash: string, codeVerifier: string, redirectUri: string, expiresAt: number): Promise<void> {
+  public async create(
+    applicationId: string,
+    stateHash: string,
+    codeVerifier: string,
+    redirectUri: string,
+    expiresAt: number,
+  ): Promise<void> {
     await this.database
       .prepare(
         `
@@ -14,7 +20,15 @@ class OAuth2AuthorizationSessionDAO {
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
       )
-      .bind(UUIDUtil.getRandomUUID(), applicationId, stateHash, codeVerifier, redirectUri, TimestampUtil.getCurrentUnixTimestampInSeconds(), expiresAt)
+      .bind(
+        UUIDUtil.getRandomUUID(),
+        applicationId,
+        stateHash,
+        codeVerifier,
+        redirectUri,
+        TimestampUtil.getCurrentUnixTimestampInSeconds(),
+        expiresAt,
+      )
       .run();
   }
 

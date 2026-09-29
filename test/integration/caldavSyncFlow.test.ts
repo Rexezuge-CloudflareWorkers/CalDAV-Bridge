@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CalDavBridgeWorker } from '@/workers';
 import { CalendarObjectMappingDAO } from '@caldav-bridge/backend-data/dao';
 import { encryptData } from '@caldav-bridge/backend-data/crypto';
-import { CalDavUtil } from '@caldav-bridge/backend-services/calendar';
+import { DavPathUtil } from '@caldav-bridge/backend-services/calendar';
 import { CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
 import { asD1Queryable } from '../helpers/d1';
 import { applyMigrations } from '../helpers/migrations';
@@ -106,7 +106,7 @@ describe('CalDAV sync round trip', () => {
     expect(response.status).toBe(207);
     // The token describes the state the objects were read at, so a client that
     // adopts it is not silently behind the collection.
-    expect(tokenFrom(body)).toBe(CalDavUtil.syncToken(APP, CAL, 1));
+    expect(tokenFrom(body)).toBe(DavPathUtil.syncToken(APP, CAL, 1));
     const sync = await REPORT(syncCollectionBody(tokenFrom(body)));
     expect(hrefsIn(await sync.text())).toEqual([]);
   });

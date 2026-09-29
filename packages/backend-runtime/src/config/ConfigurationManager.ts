@@ -18,13 +18,15 @@ class ConfigurationManager {
   // ─── Namespace groups ────────────────────────────────────────────────────────
 
   public static readonly oauth2 = {
-    getStateExpiryMinutes: (env: unknown): number => EnvParser.positiveInt(env, 'OAUTH2_STATE_EXPIRY_MINUTES', DEFAULT_OAUTH2_STATE_EXPIRY_MINUTES),
+    getStateExpiryMinutes: (env: unknown): number =>
+      EnvParser.positiveInt(env, 'OAUTH2_STATE_EXPIRY_MINUTES', DEFAULT_OAUTH2_STATE_EXPIRY_MINUTES),
     getAccessTokenFallbackTtlSeconds: (env: unknown): number =>
       EnvParser.positiveInt(env, 'OAUTH2_ACCESS_TOKEN_FALLBACK_TTL_SECONDS', DEFAULT_OAUTH2_ACCESS_TOKEN_FALLBACK_TTL_SECONDS),
   };
 
   public static readonly limits = {
-    getMaxApplicationsPerUser: (env: unknown): number => EnvParser.positiveInt(env, 'MAX_APPLICATIONS_PER_USER', DEFAULT_MAX_APPLICATIONS_PER_USER),
+    getMaxApplicationsPerUser: (env: unknown): number =>
+      EnvParser.positiveInt(env, 'MAX_APPLICATIONS_PER_USER', DEFAULT_MAX_APPLICATIONS_PER_USER),
   };
 
   public static readonly caldav = {

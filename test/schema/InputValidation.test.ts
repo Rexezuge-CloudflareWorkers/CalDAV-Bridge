@@ -7,16 +7,13 @@ const CREDENTIAL_ID = '22222222-2222-4222-8222-222222222222';
 
 describe('request input validation', () => {
   it('validates and trims connected application bodies', async () => {
-    const result = await validateRequestInput(
-      new Request('https://bridge.example.test/user/application', { method: 'POST' }),
-      {
-        displayName: ' Work Calendar ',
-        providerId: PROVIDER_GOOGLE_CALENDAR,
-        connectionMethod: CONNECTION_METHOD_OAUTH2,
-        clientId: ' client-id ',
-        clientSecret: ' client-secret ',
-      },
-    );
+    const result = await validateRequestInput(new Request('https://bridge.example.test/user/application', { method: 'POST' }), {
+      displayName: ' Work Calendar ',
+      providerId: PROVIDER_GOOGLE_CALENDAR,
+      connectionMethod: CONNECTION_METHOD_OAUTH2,
+      clientId: ' client-id ',
+      clientSecret: ' client-secret ',
+    });
 
     expect(result).toEqual({
       success: true,
@@ -59,7 +56,9 @@ describe('request input validation', () => {
 
   it('validates GET query input instead of request bodies', async () => {
     await expect(
-      validateRequestInput(new Request(`https://bridge.example.test/user/application/calendars?applicationId=${APPLICATION_ID}`), { ignored: true }),
+      validateRequestInput(new Request(`https://bridge.example.test/user/application/calendars?applicationId=${APPLICATION_ID}`), {
+        ignored: true,
+      }),
     ).resolves.toEqual({ success: true, data: { applicationId: APPLICATION_ID } });
 
     await expect(
@@ -84,6 +83,9 @@ describe('request input validation', () => {
   it('passes through routes without configured schemas', async () => {
     const body = { credentialId: CREDENTIAL_ID };
 
-    await expect(validateRequestInput(new Request('https://bridge.example.test/user/me'), body)).resolves.toEqual({ success: true, data: body });
+    await expect(validateRequestInput(new Request('https://bridge.example.test/user/me'), body)).resolves.toEqual({
+      success: true,
+      data: body,
+    });
   });
 });

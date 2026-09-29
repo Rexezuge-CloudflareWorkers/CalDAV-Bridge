@@ -76,8 +76,17 @@ describe('CalendarProviderUtil', () => {
   it('follows Microsoft event pagination', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(jsonResponse({ value: [{ id: 'one', subject: 'One', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }], '@odata.nextLink': 'https://graph.microsoft.com/next' }))
-      .mockResolvedValueOnce(jsonResponse({ value: [{ id: 'two', subject: 'Two', start: { dateTime: '2026-05-02T10:00:00Z' }, end: { dateTime: '2026-05-02T11:00:00Z' } }] }));
+      .mockResolvedValueOnce(
+        jsonResponse({
+          value: [{ id: 'one', subject: 'One', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }],
+          '@odata.nextLink': 'https://graph.microsoft.com/next',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          value: [{ id: 'two', subject: 'Two', start: { dateTime: '2026-05-02T10:00:00Z' }, end: { dateTime: '2026-05-02T11:00:00Z' } }],
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
@@ -319,7 +328,11 @@ describe('CalendarProviderUtil', () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({ error: { message: 'Too many requests' } }, 429, { 'Retry-After': '0' }))
-      .mockResolvedValueOnce(jsonResponse({ value: [{ id: 'one', subject: 'One', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }] }));
+      .mockResolvedValueOnce(
+        jsonResponse({
+          value: [{ id: 'one', subject: 'One', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }],
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
@@ -336,34 +349,67 @@ describe('CalendarProviderUtil', () => {
       .mockResolvedValueOnce(jsonResponse({ mail: null, userPrincipalName: null }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(CalendarProviderUtil.getProfile(PROVIDER_GOOGLE_CALENDAR, 'token')).resolves.toEqual({ emailAddress: 'google@example.test' });
-    await expect(CalendarProviderUtil.getProfile(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token')).resolves.toEqual({ emailAddress: 'microsoft@example.test' });
+    await expect(CalendarProviderUtil.getProfile(PROVIDER_GOOGLE_CALENDAR, 'token')).resolves.toEqual({
+      emailAddress: 'google@example.test',
+    });
+    await expect(CalendarProviderUtil.getProfile(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token')).resolves.toEqual({
+      emailAddress: 'microsoft@example.test',
+    });
     await expect(CalendarProviderUtil.getProfile(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token')).rejects.toBeInstanceOf(InternalServerError);
   });
 
   it('sends provider-specific event writes', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(jsonResponse({ id: 'google-id', iCalUID: 'google-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }))
-      .mockResolvedValueOnce(jsonResponse({ id: 'graph-id', iCalUId: 'graph-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }));
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'google-id',
+          iCalUID: 'google-uid',
+          start: { dateTime: '2026-05-01T10:00:00Z' },
+          end: { dateTime: '2026-05-01T11:00:00Z' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'graph-id',
+          iCalUId: 'graph-uid',
+          start: { dateTime: '2026-05-01T10:00:00Z' },
+          end: { dateTime: '2026-05-01T11:00:00Z' },
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     await CalendarProviderUtil.upsertEvent(
       PROVIDER_GOOGLE_CALENDAR,
       'token',
       'calendar-id',
-      { uid: 'uid', summary: 'Google', description: 'Body', location: 'Room', status: 'confirmed', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' }, recurrence: ['RRULE:FREQ=DAILY;COUNT=2'] },
+      {
+        uid: 'uid',
+        summary: 'Google',
+        description: 'Body',
+        location: 'Room',
+        status: 'confirmed',
+        start: { dateTime: '2026-05-01T10:00:00Z' },
+        end: { dateTime: '2026-05-01T11:00:00Z' },
+        recurrence: ['RRULE:FREQ=DAILY;COUNT=2'],
+      },
       'event-id',
     );
-    await CalendarProviderUtil.upsertEvent(
-      PROVIDER_MICROSOFT_OUTLOOK_CALENDAR,
-      'token',
-      'calendar-id',
-      { uid: 'uid', summary: 'Graph', description: 'Body', location: 'Room', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' }, attendees: [{ email: 'one@example.test', name: 'One' }] },
-    );
+    await CalendarProviderUtil.upsertEvent(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id', {
+      uid: 'uid',
+      summary: 'Graph',
+      description: 'Body',
+      location: 'Room',
+      start: { dateTime: '2026-05-01T10:00:00Z' },
+      end: { dateTime: '2026-05-01T11:00:00Z' },
+      attendees: [{ email: 'one@example.test', name: 'One' }],
+    });
 
     expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('PUT');
-    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toMatchObject({ summary: 'Google', recurrence: ['RRULE:FREQ=DAILY;COUNT=2'] });
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toMatchObject({
+      summary: 'Google',
+      recurrence: ['RRULE:FREQ=DAILY;COUNT=2'],
+    });
     expect(fetchMock.mock.calls[1]?.[1]?.method).toBe('POST');
     expect(JSON.parse(fetchMock.mock.calls[1]?.[1]?.body as string)).toMatchObject({
       subject: 'Graph',
@@ -373,43 +419,68 @@ describe('CalendarProviderUtil', () => {
   });
 
   it('sends Google default reminders: { useDefault: false } when event has no alarms', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ id: 'google-id', iCalUID: 'google-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        id: 'google-id',
+        iCalUID: 'google-uid',
+        start: { dateTime: '2026-05-01T10:00:00Z' },
+        end: { dateTime: '2026-05-01T11:00:00Z' },
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
-    await CalendarProviderUtil.upsertEvent(
-      PROVIDER_GOOGLE_CALENDAR,
-      'token',
-      'calendar-id',
-      { uid: 'uid', summary: 'No alarm', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } },
-    );
+    await CalendarProviderUtil.upsertEvent(PROVIDER_GOOGLE_CALENDAR, 'token', 'calendar-id', {
+      uid: 'uid',
+      summary: 'No alarm',
+      start: { dateTime: '2026-05-01T10:00:00Z' },
+      end: { dateTime: '2026-05-01T11:00:00Z' },
+    });
 
     expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string).reminders).toEqual({ useDefault: false });
   });
 
   it('sends Google reminders as overrides when event has alarms', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ id: 'google-id', iCalUID: 'google-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        id: 'google-id',
+        iCalUID: 'google-uid',
+        start: { dateTime: '2026-05-01T10:00:00Z' },
+        end: { dateTime: '2026-05-01T11:00:00Z' },
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
-    await CalendarProviderUtil.upsertEvent(
-      PROVIDER_GOOGLE_CALENDAR,
-      'token',
-      'calendar-id',
-      { uid: 'uid', summary: 'Alarm', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' }, alarms: [{ triggerMinutesBeforeStart: 10 }] },
-    );
+    await CalendarProviderUtil.upsertEvent(PROVIDER_GOOGLE_CALENDAR, 'token', 'calendar-id', {
+      uid: 'uid',
+      summary: 'Alarm',
+      start: { dateTime: '2026-05-01T10:00:00Z' },
+      end: { dateTime: '2026-05-01T11:00:00Z' },
+      alarms: [{ triggerMinutesBeforeStart: 10 }],
+    });
 
-    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string).reminders).toEqual({ useDefault: false, overrides: [{ method: 'popup', minutes: 10 }] });
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string).reminders).toEqual({
+      useDefault: false,
+      overrides: [{ method: 'popup', minutes: 10 }],
+    });
   });
 
   it('sends Graph isReminderOn: false when event has no alarms', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ id: 'graph-id', iCalUId: 'graph-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        id: 'graph-id',
+        iCalUId: 'graph-uid',
+        start: { dateTime: '2026-05-01T10:00:00Z' },
+        end: { dateTime: '2026-05-01T11:00:00Z' },
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
-    await CalendarProviderUtil.upsertEvent(
-      PROVIDER_MICROSOFT_OUTLOOK_CALENDAR,
-      'token',
-      'calendar-id',
-      { uid: 'uid', summary: 'No alarm', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } },
-    );
+    await CalendarProviderUtil.upsertEvent(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id', {
+      uid: 'uid',
+      summary: 'No alarm',
+      start: { dateTime: '2026-05-01T10:00:00Z' },
+      end: { dateTime: '2026-05-01T11:00:00Z' },
+    });
 
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(body.isReminderOn).toBe(false);
@@ -417,15 +488,23 @@ describe('CalendarProviderUtil', () => {
   });
 
   it('sends Graph isReminderOn: true with minutes when event has alarms', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ id: 'graph-id', iCalUId: 'graph-uid', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        id: 'graph-id',
+        iCalUId: 'graph-uid',
+        start: { dateTime: '2026-05-01T10:00:00Z' },
+        end: { dateTime: '2026-05-01T11:00:00Z' },
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
-    await CalendarProviderUtil.upsertEvent(
-      PROVIDER_MICROSOFT_OUTLOOK_CALENDAR,
-      'token',
-      'calendar-id',
-      { uid: 'uid', summary: 'Alarm', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' }, alarms: [{ triggerMinutesBeforeStart: 15 }] },
-    );
+    await CalendarProviderUtil.upsertEvent(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id', {
+      uid: 'uid',
+      summary: 'Alarm',
+      start: { dateTime: '2026-05-01T10:00:00Z' },
+      end: { dateTime: '2026-05-01T11:00:00Z' },
+      alarms: [{ triggerMinutesBeforeStart: 15 }],
+    });
 
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(body.isReminderOn).toBe(true);
@@ -433,17 +512,22 @@ describe('CalendarProviderUtil', () => {
   });
 
   it('sends Microsoft Graph local times with Outlook-compatible time zones', async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(jsonResponse({ id: 'graph-id', iCalUId: 'graph-uid', start: { dateTime: '2026-05-22T10:00:00', timeZone: 'Central Standard Time' }, end: { dateTime: '2026-05-22T11:00:00', timeZone: 'Central Standard Time' } }));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        id: 'graph-id',
+        iCalUId: 'graph-uid',
+        start: { dateTime: '2026-05-22T10:00:00', timeZone: 'Central Standard Time' },
+        end: { dateTime: '2026-05-22T11:00:00', timeZone: 'Central Standard Time' },
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
-    await CalendarProviderUtil.upsertEvent(
-      PROVIDER_MICROSOFT_OUTLOOK_CALENDAR,
-      'token',
-      'calendar-id',
-      { uid: 'uid', summary: 'Graph', start: { dateTime: '2026-05-22T10:00:00', timeZone: 'America/Chicago' }, end: { dateTime: '2026-05-22T11:00:00', timeZone: 'America/Chicago' } },
-    );
+    await CalendarProviderUtil.upsertEvent(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id', {
+      uid: 'uid',
+      summary: 'Graph',
+      start: { dateTime: '2026-05-22T10:00:00', timeZone: 'America/Chicago' },
+      end: { dateTime: '2026-05-22T11:00:00', timeZone: 'America/Chicago' },
+    });
 
     expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toMatchObject({
       start: { dateTime: '2026-05-22T10:00:00', timeZone: 'Central Standard Time' },
@@ -465,10 +549,16 @@ describe('CalendarProviderUtil', () => {
   });
 
   it('maps long provider throttles to retryable service errors', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({ error: { message: 'Application is over its MailboxConcurrency limit.' } }, 429, { 'Retry-After': '10' }));
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { message: 'Application is over its MailboxConcurrency limit.' } }, 429, { 'Retry-After': '10' }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
-    const throttleError = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id').catch((error: unknown) => error);
+    const throttleError = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id').catch(
+      (error: unknown) => error,
+    );
     expect(throttleError).toBeInstanceOf(ServiceUnavailableError);
     expect((throttleError as ServiceUnavailableError).getErrorCode()).toBe(503);
     expect((throttleError as ServiceUnavailableError).headers).toEqual({ 'Retry-After': '10' });

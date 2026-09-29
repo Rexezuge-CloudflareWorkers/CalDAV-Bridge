@@ -3,31 +3,39 @@ import { AbstractEntrypointWorker } from '@caldav-bridge/backend-runtime/base';
 import { DURABLE_OBJECT_CRON_TASKS_RUN_URL, DURABLE_OBJECT_NAMESPACE_GLOBAL } from '@caldav-bridge/backend-runtime/constants';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { createD1SessionEnv } from '@caldav-bridge/backend-data/utils';
-import { CalDavCredentialDAO, CalendarObjectMappingDAO } from '@caldav-bridge/backend-data/dao';
+import { CalDavCredentialDAO } from '@caldav-bridge/backend-data/dao';
 import {
   BadRequestError,
   MethodNotAllowedError,
   NotFoundError,
   NotImplementedError,
   PreconditionFailedError,
-  RequestEntityTooLargeError,
   ServiceError,
   UnauthorizedError,
   UnsupportedMediaTypeError,
 } from '@caldav-bridge/backend-errors';
 import { ApplicationService } from '@caldav-bridge/backend-services/application';
 import type { CreateApplicationInput } from '@caldav-bridge/backend-services/application';
-import { CalDavUtil, CalendarService, ICalendarUtil } from '@caldav-bridge/backend-services/calendar';
+import {
+  CalendarService,
+  DavPathUtil,
+  DavRequestParser,
+  DavResponseBuilder,
+  ICalendarUtil,
+  eventEtag,
+  ifMatchMatches,
+} from '@caldav-bridge/backend-services/calendar';
 import { CredentialService } from '@caldav-bridge/backend-services/credential';
 import { OAuth2AuthorizationService } from '@caldav-bridge/backend-services/oauth2';
 import { UserService } from '@caldav-bridge/backend-services/user';
 import type { UserIdentity } from '@caldav-bridge/backend-services/user';
 import { BaseUrlUtil, CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
-import { DAV_MULTIGET_MAX_HREFS, DAV_REQUEST_BODY_MAX_BYTES, DAV_RESOURCE_MAX_BYTES } from '@caldav-bridge/shared/constants';
+import { DAV_MULTIGET_MAX_HREFS } from '@caldav-bridge/shared/constants';
 import { validateRequestInput } from '@caldav-bridge/shared/schema';
 import type { CalendarEvent, ConnectedApplication } from '@caldav-bridge/shared/model';
 import { MiddlewareHandlers } from '@/middleware';
 import { errorResponse, jsonResponse } from '@caldav-bridge/backend-runtime/http';
+import { DavRequestContext, readDavBody } from './DavRequestContext';
 import { SPA_HTML } from '@/generated/spa-shell';
 
 type AppBindings = Env;
@@ -198,170 +206,181 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
   }
 
   private async handleDav(request: Request, env: Env): Promise<Response> {
-    const calendarService = new CalendarService(env);
-    if (request.method === 'OPTIONS') return CalDavUtil.options();
-    // Size is checked before authentication on purpose: an oversized body is
-    // refused on its own merits, so an unauthenticated caller cannot make this
-    // server buffer one.
-    // Read once, up front: a `Request` body is single-use, and the size is
-    // checked before the text is handed to any parser or provider.
-    const body = DAV_BODY_METHODS.has(request.method) ? await readDavBody(request, davBodyLimit(request.method)) : '';
-    const url = new URL(request.url);
-    const path = CalDavUtil.parsePath(url.pathname);
+    if (request.method === 'OPTIONS') return DavResponseBuilder.options();
+    // The body is read, and bounded, before authentication on purpose: an
+    // oversized body is refused on its own merits, so an unauthenticated caller
+    // cannot make this server buffer one.
+    const body = await readDavBody(request);
+    const path = DavPathUtil.parsePath(new URL(request.url).pathname);
     if (path.resource === 'invalid') throw new BadRequestError('Malformed CalDAV request path.');
-    if (path.resource === 'unknown') return CalDavUtil.notFound(url.pathname);
+    if (path.resource === 'unknown') return DavResponseBuilder.notFound(new URL(request.url).pathname);
     const application = await this.authenticateDav(request, env, path.applicationId);
-    const mappingDAO = new CalendarObjectMappingDAO(env.DB);
+    const context = DavRequestContext.resolve(request, env, application, path, body);
 
-    if (request.method === 'PROPFIND') return this.handleDavPropfind(body, request, calendarService, application, path, mappingDAO);
-    if (request.method === 'REPORT') return this.handleDavReport(body, request, calendarService, application, path, mappingDAO);
+    if (request.method === 'PROPFIND') return this.handleDavPropfind(context);
+    if (request.method === 'REPORT') return this.handleDavReport(context);
+    if (path.resource !== 'object') throw new MethodNotAllowedError('Unsupported CalDAV method for this resource.');
 
-    if (path.resource !== 'object' || !path.calendarId || !path.objectHref)
-      throw new MethodNotAllowedError('Unsupported CalDAV method for this resource.');
-
-    const accessToken = await calendarService.getAccessToken(application.applicationId);
-    if (request.method === 'GET' || request.method === 'HEAD') {
-      const event = await calendarService.getDavObject(application, accessToken, mappingDAO, path.calendarId, path.objectHref);
-      if (request.method === 'HEAD') return CalDavUtil.headCalendarResponse(event);
-      return CalDavUtil.textCalendarResponse(ICalendarUtil.toICS(event), event.etag || event.uid);
-    }
-
-    if (request.method === 'PUT') {
-      await calendarService.requireWritableCalendar(application, accessToken, path.calendarId);
-      // RFC 4918 §9.7.1. Clients that send no Content-Type are common enough to
-      // accept, but one that names a different type is telling us it is not
-      // sending a calendar object, and the body is about to become a real event.
-      const contentType = request.headers.get('Content-Type')?.split(';')[0]?.trim().toLowerCase();
-      if (contentType && contentType !== 'text/calendar')
-        throw new UnsupportedMediaTypeError(`Unsupported media type: ${contentType}.`);
-      const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
-      const liveMapping = mapping?.deletedAt ? undefined : mapping;
-      if (request.headers.get('If-None-Match')?.trim() === '*' && liveMapping)
-        throw new PreconditionFailedError('Calendar object already exists.');
-      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), liveMapping?.etag || undefined, 'strong'))
-        throw new PreconditionFailedError('Calendar object ETag does not match.');
-      // `fromICS` throws on anything that is not a single well-formed VEVENT, so
-      // a malformed body is rejected before it can reach the provider calendar.
-      const event = ICalendarUtil.fromICS(body, liveMapping?.uid || crypto.randomUUID());
-      // The stored etag rides along so the provider can reject the write if the
-      // object changed in its own UI since this bridge last saw it.
-      const saved = await calendarService.upsertEvent(
-        application,
-        accessToken,
-        path.calendarId,
-        event,
-        liveMapping?.providerEventId,
-        liveMapping?.etag ?? undefined,
-      );
-      await mappingDAO.upsert(application.applicationId, path.calendarId, path.objectHref, saved.id || event.uid, saved.uid, saved.etag);
-      return new Response(null, {
-        status: liveMapping ? 204 : 201,
-        headers: { ETag: CalDavUtil.eventEtag(saved), Location: url.pathname },
-      });
-    }
-    if (request.method === 'DELETE') {
-      await calendarService.requireWritableCalendar(application, accessToken, path.calendarId);
-      const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
-      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), mapping?.etag || undefined, 'strong'))
-        throw new PreconditionFailedError('Calendar object ETag does not match.');
-      // With no mapping there is no object here to delete, so this is a `404`
-      // per RFC 4918 §9.6.1 rather than a `204`. Deriving a provider id from the
-      // client-supplied href would also issue a delete the bridge has no record
-      // of having created.
-      if (!mapping || mapping.deletedAt) throw new NotFoundError('Calendar object was not found.');
-      await calendarService.deleteEvent(application, accessToken, path.calendarId, mapping.providerEventId);
-      await mappingDAO.markDeletedByHref(application.applicationId, path.calendarId, path.objectHref);
-      return new Response(null, { status: 204 });
-    }
+    if (request.method === 'GET' || request.method === 'HEAD') return this.handleDavGet(context);
+    if (request.method === 'PUT') return this.handleDavPut(context);
+    if (request.method === 'DELETE') return this.handleDavDelete(context);
     throw new MethodNotAllowedError('Unsupported CalDAV method.');
   }
 
-  private async handleDavPropfind(
-    body: string,
-    request: Request,
-    calendarService: CalendarService,
-    application: ConnectedApplication,
-    path: ReturnType<typeof CalDavUtil.parsePath>,
-    mappingDAO: CalendarObjectMappingDAO,
-  ): Promise<Response> {
-    const propfind = CalDavUtil.parsePropfind(body);
-    const depth = CalDavUtil.parseDepth(request.headers.get('Depth'));
-    if (path.resource === 'root') return CalDavUtil.propfindRoot(application.applicationId, propfind);
-    if (path.resource === 'principal') return CalDavUtil.propfindPrincipal(application.applicationId, propfind);
+  private async handleDavGet(context: DavRequestContext): Promise<Response> {
+    const event = await this.requireDavObject(context, (application, accessToken) =>
+      context.calendarService.getDavObject(
+        application,
+        accessToken,
+        context.mappingDAO,
+        requireCalendarId(context),
+        requireObjectHref(context),
+      ),
+    );
+    if (context.request.method === 'HEAD') return DavResponseBuilder.headCalendarResponse(event);
+    return DavResponseBuilder.textCalendarResponse(ICalendarUtil.toICS(event), event.etag || event.uid);
+  }
 
-    const accessToken = await calendarService.getAccessToken(application.applicationId);
+  private async handleDavPut(context: DavRequestContext): Promise<Response> {
+    const calendarId = requireCalendarId(context);
+    const objectHref = requireObjectHref(context);
+    const { application, mappingDAO } = context;
+    const accessToken = await this.requireWritableObject(context, calendarId);
+    // RFC 4918 §9.7.1. Clients that send no Content-Type are common enough to
+    // accept, but one that names a different type is telling us it is not
+    // sending a calendar object, and the body is about to become a real event.
+    const contentType = context.request.headers.get('Content-Type')?.split(';')[0]?.trim().toLowerCase();
+    if (contentType && contentType !== 'text/calendar') throw new UnsupportedMediaTypeError(`Unsupported media type: ${contentType}.`);
+
+    const mapping = await mappingDAO.getByHref(context.applicationId, calendarId, objectHref);
+    const live = mapping?.deletedAt ? undefined : mapping;
+    if (context.request.headers.get('If-None-Match')?.trim() === '*' && live)
+      throw new PreconditionFailedError('Calendar object already exists.');
+    if (!ifMatchMatches(context.request.headers.get('If-Match'), live?.etag || undefined))
+      throw new PreconditionFailedError('Calendar object ETag does not match.');
+    // `fromICS` throws on anything that is not a single well-formed VEVENT, so a
+    // malformed body is rejected before it can reach the provider calendar.
+    const event = ICalendarUtil.fromICS(context.body, live?.uid || crypto.randomUUID());
+    // The stored etag rides along so the provider can reject the write if the
+    // object changed in its own UI since this bridge last saw it.
+    const saved = await context.calendarService.upsertEvent(
+      application,
+      accessToken,
+      calendarId,
+      event,
+      live?.providerEventId,
+      live?.etag ?? undefined,
+    );
+    await mappingDAO.upsert(context.applicationId, calendarId, objectHref, saved.id || event.uid, saved.uid, saved.etag);
+    return new Response(null, {
+      status: live ? 204 : 201,
+      headers: { ETag: eventEtag(saved), Location: new URL(context.request.url).pathname },
+    });
+  }
+
+  private async handleDavDelete(context: DavRequestContext): Promise<Response> {
+    const calendarId = requireCalendarId(context);
+    const objectHref = requireObjectHref(context);
+    const accessToken = await this.requireWritableObject(context, calendarId);
+    const mapping = await context.mappingDAO.getByHref(context.applicationId, calendarId, objectHref);
+    if (!ifMatchMatches(context.request.headers.get('If-Match'), mapping?.etag || undefined))
+      throw new PreconditionFailedError('Calendar object ETag does not match.');
+    // With no mapping there is no object here to delete, so this is a `404` per
+    // RFC 4918 §9.6.1 rather than a `204`. Deriving a provider id from the
+    // client-supplied href would also issue a delete the bridge has no record of
+    // having created.
+    if (!mapping || mapping.deletedAt) throw new NotFoundError('Calendar object was not found.');
+    await context.calendarService.deleteEvent(context.application, accessToken, calendarId, mapping.providerEventId);
+    await context.mappingDAO.markDeletedByHref(context.applicationId, calendarId, objectHref);
+    return new Response(null, { status: 204 });
+  }
+
+  /** Assert the calendar is writable, then hand back a token for the write itself. */
+  private async requireWritableObject(context: DavRequestContext, calendarId: string): Promise<string> {
+    const accessToken = await context.accessToken();
+    await context.calendarService.requireWritableCalendar(context.application, accessToken, calendarId);
+    return accessToken;
+  }
+
+  private async requireDavObject<T>(
+    context: DavRequestContext,
+    resolve: (application: ConnectedApplication, accessToken: string) => Promise<T>,
+  ): Promise<T> {
+    return resolve(context.application, await context.accessToken());
+  }
+
+  private async handleDavPropfind(context: DavRequestContext): Promise<Response> {
+    const propfind = DavRequestParser.parsePropfind(context.body);
+    const depth = DavRequestParser.parseDepth(context.request.headers.get('Depth'));
+    const { application, applicationId, path, mappingDAO } = context;
+
+    if (path.resource === 'root') return DavResponseBuilder.propfindRoot(applicationId, propfind);
+    if (path.resource === 'principal') return DavResponseBuilder.propfindPrincipal(applicationId, propfind);
+
     if (path.resource === 'calendarHome') {
-      const calendars = depth > 0 ? await calendarService.listCalendars(application) : [];
-      return CalDavUtil.propfindCalendarHome(application.applicationId, calendars, propfind, depth);
+      const calendars = depth > 0 ? await context.calendarService.listCalendars(application) : [];
+      return DavResponseBuilder.propfindCalendarHome(applicationId, calendars, propfind, depth);
     }
-    if (path.resource === 'calendar' && path.calendarId) {
-      const calendar = await calendarService.requireCalendar(application, accessToken, path.calendarId);
+    if (path.resource === 'calendar' && context.calendarId) {
+      const accessToken = await context.accessToken();
+      const calendar = await context.calendarService.requireCalendar(application, accessToken, context.calendarId);
       const shouldFetchObjects = depth > 0 || this.propfindNeedsCalendarObjects(propfind);
-      const events = shouldFetchObjects ? await calendarService.listEvents(application, accessToken, path.calendarId) : [];
+      const events = shouldFetchObjects ? await context.calendarService.listEvents(application, accessToken, context.calendarId) : [];
       // The token must be the state the objects below were read at. Taking it
       // from the sync itself keeps the two in agreement, where a second read
       // could hand back a version newer than the objects just serialised.
       const synced = shouldFetchObjects
-        ? await calendarService.syncProviderSnapshot(mappingDAO, application.applicationId, path.calendarId, events)
-        : { live: [], deleted: [], syncVersion: await mappingDAO.getMaxSyncVersion(application.applicationId, path.calendarId) };
-      const syncToken = CalDavUtil.syncToken(application.applicationId, path.calendarId, synced.syncVersion);
-      return CalDavUtil.propfindCalendar(
-        application.applicationId,
+        ? await context.calendarService.syncProviderSnapshot(mappingDAO, applicationId, context.calendarId, events)
+        : { live: [], deleted: [], syncVersion: await mappingDAO.getMaxSyncVersion(applicationId, context.calendarId) };
+      return DavResponseBuilder.propfindCalendar(
+        applicationId,
         calendar,
         propfind,
         depth,
         [...synced.live, ...synced.deleted],
-        syncToken,
+        DavPathUtil.syncToken(applicationId, context.calendarId, synced.syncVersion),
       );
     }
-    if (path.resource === 'object' && path.calendarId && path.objectHref) {
-      const event = await calendarService.getDavObject(application, accessToken, mappingDAO, path.calendarId, path.objectHref);
-      return CalDavUtil.propfindObject(application.applicationId, path.calendarId, path.objectHref, event, propfind);
+    if (path.resource === 'object' && context.calendarId && context.objectHref) {
+      const event = await context.calendarService.getDavObject(
+        application,
+        await context.accessToken(),
+        mappingDAO,
+        context.calendarId,
+        context.objectHref,
+      );
+      return DavResponseBuilder.propfindObject(applicationId, context.calendarId, context.objectHref, event, propfind);
     }
-    return CalDavUtil.notFound(new URL(request.url).pathname);
+    return DavResponseBuilder.notFound(new URL(context.request.url).pathname);
   }
 
-  private async handleDavReport(
-    body: string,
-    request: Request,
-    calendarService: CalendarService,
-    application: ConnectedApplication,
-    path: ReturnType<typeof CalDavUtil.parsePath>,
-    mappingDAO: CalendarObjectMappingDAO,
-  ): Promise<Response> {
-    if (path.resource !== 'calendar' || !path.calendarId)
-      throw new MethodNotAllowedError('CalDAV reports are only supported on calendar collections.');
-    const report = CalDavUtil.parseReport(body);
+  private async handleDavReport(context: DavRequestContext): Promise<Response> {
+    const calendarId = requireCalendarId(context);
+    const { application, applicationId, mappingDAO } = context;
+    if (context.path.resource !== 'calendar') throw new MethodNotAllowedError('CalDAV reports are only supported on calendar collections.');
+    const report = DavRequestParser.parseReport(context.body);
     if (report.type !== 'calendar-query' && report.type !== 'calendar-multiget' && report.type !== 'sync-collection')
       // RFC 4791 §7.1: an unsupported report is `501`, not `400`. `400` tells the
       // client its body was malformed, which sends it looking for a syntax error
       // in a request the server simply does not implement.
       throw new NotImplementedError('Unsupported CalDAV report.');
 
-    const accessToken = await calendarService.getAccessToken(application.applicationId);
+    const accessToken = await context.accessToken();
 
     if (report.type === 'calendar-query') {
       // RFC 4791 §7.8: a server that cannot evaluate a filter must not answer
       // with results that do not match it. Returning the events it can see would
       // be a confident wrong answer, so the client is told to re-provision.
-      if (report.unsupportedFilter) return CalDavUtil.invalidFilter(report.unsupportedFilter);
-      const events = await calendarService.listEvents(application, accessToken, path.calendarId, report.timeRange);
+      if (report.unsupportedFilter) return DavResponseBuilder.invalidFilter(report.unsupportedFilter);
+      const events = await context.calendarService.listEvents(application, accessToken, calendarId, report.timeRange);
       const isFullSnapshot = !report.timeRange?.start && !report.timeRange?.end;
-      // A time-ranged query returns a subset, so treating what is absent from
-      // it as deleted would tombstone the whole rest of the calendar. Only a
-      // full snapshot is allowed to conclude anything from an absence.
+      // A time-ranged query returns a subset, so treating what is absent from it
+      // as deleted would tombstone the whole rest of the calendar. Only a full
+      // snapshot is allowed to conclude anything from an absence.
       const synced = isFullSnapshot
-        ? await calendarService.syncProviderSnapshot(mappingDAO, application.applicationId, path.calendarId, events)
-        : {
-            live: events.map((event) => ({ href: ICalendarUtil.eventHref(event), event })),
-            deleted: [],
-          };
-      return CalDavUtil.calendarObjectReport(
-        application.applicationId,
-        path.calendarId,
-        [...synced.live, ...synced.deleted],
-        report.properties,
-      );
+        ? await context.calendarService.syncProviderSnapshot(mappingDAO, applicationId, calendarId, events)
+        : { live: events.map((event) => ({ href: ICalendarUtil.eventHref(event), event })), deleted: [] };
+      return DavResponseBuilder.calendarObjectReport(applicationId, calendarId, [...synced.live, ...synced.deleted], report.properties);
     }
 
     if (report.type === 'sync-collection') {
@@ -369,52 +388,70 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
       // client (or anyone who read a token from a log) jump the cursor and skip
       // changes; accepting a corrupt one returned the whole collection with no
       // signal that the client must start over.
-      const token = CalDavUtil.parseSyncToken(report.syncToken, application.applicationId, path.calendarId);
-      if ('invalid' in token) return CalDavUtil.invalidSyncToken();
-      const syncVersion = token.version;
-      const events = await calendarService.listEvents(application, accessToken, path.calendarId);
-      const synced = await calendarService.syncProviderSnapshot(mappingDAO, application.applicationId, path.calendarId, events);
+      const token = DavPathUtil.parseSyncToken(report.syncToken, applicationId, calendarId);
+      if ('invalid' in token) return DavResponseBuilder.invalidSyncToken();
+      const events = await context.calendarService.listEvents(application, accessToken, calendarId);
+      const synced = await context.calendarService.syncProviderSnapshot(mappingDAO, applicationId, calendarId, events);
       // Capture the ceiling, then report exactly the window that was captured.
       // Selecting "everything since the client's token" and reading the maximum
       // afterwards would report a window that had already closed: a write
       // landing in between carries a version at or below the returned token
       // while being absent from the results, and the next request asks for
       // `> token`, so the client is never sent that object again.
-      const through = Math.max(synced.syncVersion, syncVersion);
-      const changedMappings = await mappingDAO.listChangedBetween(application.applicationId, path.calendarId, syncVersion, through);
+      const through = Math.max(synced.syncVersion, token.version);
+      const changedMappings = await mappingDAO.listChangedBetween(applicationId, calendarId, token.version, through);
       const eventByProviderId = new Map(events.map((event) => [event.id || event.uid, event]));
-      const results = calendarService.mappingsToReportResults(changedMappings, eventByProviderId);
-      return CalDavUtil.syncCollectionReport(
-        application.applicationId,
-        path.calendarId,
-        results,
+      return DavResponseBuilder.syncCollectionReport(
+        applicationId,
+        calendarId,
+        context.calendarService.mappingsToReportResults(changedMappings, eventByProviderId),
         report.properties,
-        CalDavUtil.syncToken(application.applicationId, path.calendarId, through),
+        DavPathUtil.syncToken(applicationId, calendarId, through),
       );
     }
 
+    return this.handleDavMultiget(context, report, calendarId, accessToken);
+  }
+
+  /**
+   * A `calendar-multiget`: one result per requested href, live or a `404`.
+   *
+   * A href the client cannot have meant -- one that does not resolve into this
+   * collection -- is reported as missing rather than looked up, so a foreign
+   * path cannot be used to probe for objects.
+   */
+  private async handleDavMultiget(
+    context: DavRequestContext,
+    report: { hrefs: string[]; properties: string[] },
+    calendarId: string,
+    accessToken: string,
+  ): Promise<Response> {
+    const { application, applicationId, mappingDAO } = context;
     const results: Array<{ href: string; event?: CalendarEvent | undefined; status?: number | undefined }> = [];
     // Each href costs a provider round-trip, so the list is bounded rather than
     // allowing one request to drive unbounded serial calls to the provider.
-    const hrefs = report.hrefs.slice(0, DAV_MULTIGET_MAX_HREFS);
-    for (const href of hrefs) {
-      const objectHref = CalDavUtil.objectHrefFromDavHref(href, application.applicationId, path.calendarId);
+    for (const href of report.hrefs.slice(0, DAV_MULTIGET_MAX_HREFS)) {
+      const objectHref = DavPathUtil.objectHrefFromDavHref(href, applicationId, calendarId);
       if (!objectHref) {
         results.push({ href, status: 404 });
         continue;
       }
       try {
-        const event = await calendarService.getDavObject(application, accessToken, mappingDAO, path.calendarId, objectHref);
-        results.push({ href: objectHref, event });
+        results.push({
+          href: objectHref,
+          event: await context.calendarService.getDavObject(application, accessToken, mappingDAO, calendarId, objectHref),
+        });
       } catch (error) {
+        // A single missing object must not fail the whole multiget; anything
+        // else is a real failure and propagates.
         if (error instanceof ServiceError && error.getErrorCode() === 404) results.push({ href: objectHref, status: 404 });
         else throw error;
       }
     }
-    return CalDavUtil.calendarObjectReport(application.applicationId, path.calendarId, results, report.properties);
+    return DavResponseBuilder.calendarObjectReport(applicationId, calendarId, results, report.properties);
   }
 
-  private propfindNeedsCalendarObjects(propfind: ReturnType<typeof CalDavUtil.parsePropfind>): boolean {
+  private propfindNeedsCalendarObjects(propfind: ReturnType<typeof DavRequestParser.parsePropfind>): boolean {
     return (
       propfind.mode === 'allprop' ||
       (propfind.mode === 'prop' && (propfind.properties.includes('getctag') || propfind.properties.includes('sync-token')))
@@ -501,34 +538,31 @@ async function safeDav(action: () => Promise<Response>): Promise<Response> {
       // their message. It is logged rather than returned: the client needs to
       // know the request failed, not how the store is laid out.
       console.error(error);
-      return CalDavUtil.davError(status, 'The server encountered an internal error.', error instanceof ServiceError ? error.headers : undefined);
+      return DavResponseBuilder.davError(
+        status,
+        'The server encountered an internal error.',
+        error instanceof ServiceError ? error.headers : undefined,
+      );
     }
     const message = error instanceof Error ? error.message : 'Internal server error.';
-    return CalDavUtil.davError(status, message, error instanceof ServiceError ? error.headers : undefined);
+    return DavResponseBuilder.davError(status, message, error instanceof ServiceError ? error.headers : undefined);
   }
 }
 
-/** DAV methods that carry a request body worth bounding. */
-const DAV_BODY_METHODS: ReadonlySet<string> = new Set(['PROPFIND', 'REPORT', 'PUT']);
-
-function davBodyLimit(method: string): number {
-  return method === 'PUT' ? DAV_RESOURCE_MAX_BYTES : DAV_REQUEST_BODY_MAX_BYTES;
+/**
+ * The calendar this request addresses.
+ *
+ * Reached only after routing has established that the path names an object or a
+ * collection, so the absence here is a routing mistake rather than a client one.
+ */
+function requireCalendarId(context: DavRequestContext): string {
+  if (!context.calendarId) throw new MethodNotAllowedError('Unsupported CalDAV method for this resource.');
+  return context.calendarId;
 }
 
-/**
- * Refuse an oversized DAV body before it is buffered, parsed or forwarded.
- *
- * `Content-Length` is checked first so a large upload is rejected on its
- * declared size alone. The body is then read and measured again, because that
- * header is client-supplied: it may be absent, or simply wrong, and it is the
- * byte count of what actually arrived that matters.
- */
-async function readDavBody(request: Request, maxBytes: number): Promise<string> {
-  const declaredLength = Number(request.headers.get('Content-Length'));
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw new RequestEntityTooLargeError();
-  const body = await request.text();
-  if (new TextEncoder().encode(body).length > maxBytes) throw new RequestEntityTooLargeError();
-  return body;
+function requireObjectHref(context: DavRequestContext): string {
+  if (!context.objectHref) throw new MethodNotAllowedError('Unsupported CalDAV method for this resource.');
+  return context.objectHref;
 }
 
 function redirect(location: string): Response {

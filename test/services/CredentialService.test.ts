@@ -52,16 +52,24 @@ describe('CredentialService', () => {
     );
 
     credentialSpies.countByApplication.mockResolvedValue(0);
-    await expect(
-      new CredentialService(testEnv()).createCredential(connectedApplication() as never, 'Laptop', 9999),
-    ).rejects.toThrow('CalDAV credential expiry cannot exceed 365 days.');
+    await expect(new CredentialService(testEnv()).createCredential(connectedApplication() as never, 'Laptop', 9999)).rejects.toThrow(
+      'CalDAV credential expiry cannot exceed 365 days.',
+    );
   });
 
   it('creates credentials with generated passwords and metadata', async () => {
     credentialSpies.countByApplication.mockResolvedValue(0);
     credentialSpies.usernameExists.mockResolvedValue(false);
     credentialSpies.create.mockImplementation(
-      async (_applicationId: string, username: string, _hash: string, name: string, prefix: string, lastFour: string, expiresAt: number) => ({
+      async (
+        _applicationId: string,
+        username: string,
+        _hash: string,
+        name: string,
+        prefix: string,
+        lastFour: string,
+        expiresAt: number,
+      ) => ({
         credentialId: 'cred-1',
         applicationId: 'app-1',
         username,

@@ -1,4 +1,10 @@
-import { BadRequestError, InternalServerError, NotFoundError, PreconditionFailedError, ServiceUnavailableError } from '@caldav-bridge/backend-errors';
+import {
+  BadRequestError,
+  InternalServerError,
+  NotFoundError,
+  PreconditionFailedError,
+  ServiceUnavailableError,
+} from '@caldav-bridge/backend-errors';
 
 const MAX_THROTTLE_RETRY_ATTEMPTS = 2;
 const MAX_RETRY_AFTER_SECONDS = 2;
@@ -27,7 +33,9 @@ async function fetchProviderJson<T>(url: string, accessToken: string, init: Requ
     headers.set('Authorization', `Bearer ${accessToken}`);
     const response = await fetch(url, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(PROVIDER_REQUEST_TIMEOUT_MS) });
     const text = await response.text();
-    const data = text ? (parseProviderJson<T & { error?: { message?: string } }>(text) ?? ({} as T & { error?: { message?: string } })) : ({} as T & { error?: { message?: string } });
+    const data = text
+      ? (parseProviderJson<T & { error?: { message?: string } }>(text) ?? ({} as T & { error?: { message?: string } }))
+      : ({} as T & { error?: { message?: string } });
     if (response.ok) return data as T;
 
     if (response.status === 429 && attempt < MAX_THROTTLE_RETRY_ATTEMPTS) {

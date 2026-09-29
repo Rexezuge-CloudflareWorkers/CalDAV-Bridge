@@ -72,8 +72,13 @@ class OAuth2ProviderUtil {
       grant_type: 'authorization_code',
       redirect_uri: input.redirectUri,
     });
-    if (!data.refresh_token) throw new BadRequestError('OAuth2 provider did not return a refresh token. Reconnect and approve offline access.');
-    return { accessToken: data.access_token, refreshToken: data.refresh_token, expiresIn: OAuth2ProviderUtil.parseExpiresIn(data.expires_in) };
+    if (!data.refresh_token)
+      throw new BadRequestError('OAuth2 provider did not return a refresh token. Reconnect and approve offline access.');
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresIn: OAuth2ProviderUtil.parseExpiresIn(data.expires_in),
+    };
   }
 
   public static async refreshAccessToken(input: OAuth2RefreshInput): Promise<OAuth2TokenResult> {
@@ -85,7 +90,11 @@ class OAuth2ProviderUtil {
       grant_type: 'refresh_token',
       refresh_token: input.credentials.refreshToken,
     });
-    return { accessToken: data.access_token, refreshToken: data.refresh_token, expiresIn: OAuth2ProviderUtil.parseExpiresIn(data.expires_in) };
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresIn: OAuth2ProviderUtil.parseExpiresIn(data.expires_in),
+    };
   }
 
   private static getProviderConfig(providerId: string) {

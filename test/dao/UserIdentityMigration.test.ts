@@ -63,9 +63,14 @@ function seedLegacyGraph(database: DatabaseSync): void {
 }
 
 function countRows(database: DatabaseSync): Record<string, number> {
-  return Object.fromEntries(
-    GUARDED_TABLES.map((table) => [table, database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count ?? 0]),
-  );
+  // `node:sqlite` types a bare `COUNT(*)` column as the union of every type it
+  // can return, since the column's type is not inferable from the query.
+  const counts: Record<string, number> = {};
+  for (const table of GUARDED_TABLES) {
+    const row = database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number } | undefined;
+    counts[table] = row?.count ?? 0;
+  }
+  return counts;
 }
 
 function foreignKeyViolations(database: DatabaseSync): unknown[] {

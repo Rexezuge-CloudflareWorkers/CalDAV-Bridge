@@ -19,7 +19,14 @@ vi.mock('@caldav-bridge/backend-data/dao', () => ({
 
 import { OAuth2AccessTokenService } from '@caldav-bridge/backend-services/oauth2';
 
-function testEnv(cached: string | null = null): Record<string, unknown> {
+/**
+ * A stand-in for the worker's environment, with the KV double typed so the
+ * assertions below can inspect it -- an untyped `Record<string, unknown>` would
+ * make `env.OAUTH2_TOKEN_CACHE.put` a type error rather than a checkable spy.
+ */
+function testEnv(
+  cached: string | null = null,
+): { OAUTH2_TOKEN_CACHE: { get: (key: string) => Promise<string | null>; put: ReturnType<typeof vi.fn> } } & Record<string, unknown> {
   const store = new Map<string, string>(cached ? [['oauth2:app-1', cached]] : []);
   return {
     DB: {},
@@ -95,5 +102,36 @@ describe('OAuth2AccessTokenService', () => {
 
     expect(applicationSpies.markOAuth2Connected).toHaveBeenCalledWith('app-1', 'fresh-refresh', 'user@example.test');
     expect(env.OAUTH2_TOKEN_CACHE.put).toHaveBeenCalledWith('oauth2:app-1', 'fresh-token', { expirationTtl: 1740 });
+  });
+
+  /**
+   * The cached TTL is the provider's lifetime minus a margin, so a token is
+   * refreshed before it expires rather than after a request has already presented
+   * it. The margin was hardcoded as `Math.max(60, …)` at both call sites while
+   * `OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS` sat unread in the wrangler template.
+   */
+  it('shortens the cached lifetime by the configured margin', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(tokenResponse({ access_token: 'new-token', expires_in: 3600 })));
+    applicationSpies.getById.mockResolvedValue(application());
+    applicationSpies.updateOAuth2RefreshToken.mockResolvedValue(undefined);
+    const env = testEnv();
+
+    await OAuth2AccessTokenService.refreshAccessToken('app-1', { ...env, OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS: '300' } as never);
+
+    // 3600 from the provider, less the 300-second margin.
+    expect(env.OAUTH2_TOKEN_CACHE.put).toHaveBeenCalledWith('oauth2:app-1', 'new-token', { expirationTtl: 3300 });
+  });
+
+  it('caches for the margin itself when the provider reports a very short lifetime', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(tokenResponse({ access_token: 'new-token', expires_in: 30 })));
+    applicationSpies.getById.mockResolvedValue(application());
+    applicationSpies.updateOAuth2RefreshToken.mockResolvedValue(undefined);
+    const env = testEnv();
+
+    await OAuth2AccessTokenService.refreshAccessToken('app-1', { ...env, OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS: '60' } as never);
+
+    // A token already inside its own margin is still cached, for exactly the
+    // margin. Caching it for less would mean a refresh on every request.
+    expect(env.OAUTH2_TOKEN_CACHE.put).toHaveBeenCalledWith('oauth2:app-1', 'new-token', { expirationTtl: 60 });
   });
 });

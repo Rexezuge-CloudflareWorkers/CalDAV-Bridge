@@ -17,7 +17,11 @@ const badgeVariants = cva('inline-flex items-center px-2 py-0.5 rounded-md text-
 
 export type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>['variant']>;
 
-export function Badge({ className, variant, children }: { className?: string; children: React.ReactNode } & VariantProps<typeof badgeVariants>) {
+export function Badge({
+  className,
+  variant,
+  children,
+}: { className?: string; children: React.ReactNode } & VariantProps<typeof badgeVariants>) {
   return <span className={cn(badgeVariants({ variant }), className)}>{children}</span>;
 }
 

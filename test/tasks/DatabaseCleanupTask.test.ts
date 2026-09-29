@@ -100,12 +100,16 @@ describe('DatabaseCleanupTask', () => {
   });
 });
 
-function fakeDatabase(run: ReturnType<typeof vi.fn>): D1Database {
+/**
+ * A D1 double for the one statement the task issues without a DAO.
+ *
+ * `run` returns the whole `D1Result`, since the task reads `meta.changes` off it
+ * and that is the number being asserted.
+ */
+function fakeDatabase(run: (limit: number) => Promise<D1Result>): D1Database {
   return {
-    prepare: vi.fn(() => ({
-      bind: vi.fn((limit: number) => ({
-        run: () => run(limit),
-      })),
-    })),
+    prepare: () => ({
+      bind: (limit: number) => ({ run: () => run(limit) }),
+    }),
   } as unknown as D1Database;
 }

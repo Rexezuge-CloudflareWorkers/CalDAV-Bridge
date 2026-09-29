@@ -32,7 +32,9 @@ export function ConnectForm({
     <Card>
       <div className="grid gap-4">
         <div>
-          <Label className="mb-1.5" htmlFor="connect-name">Name</Label>
+          <Label className="mb-1.5" htmlFor="connect-name">
+            Name
+          </Label>
           <Input
             id="connect-name"
             value={displayName}
@@ -41,18 +43,24 @@ export function ConnectForm({
           />
         </div>
         <div>
-          <Label className="mb-1.5" htmlFor="connect-provider">Provider</Label>
+          <Label className="mb-1.5" htmlFor="connect-provider">
+            Provider
+          </Label>
           <Select id="connect-provider" value={providerId} onChange={(event) => setProviderId(event.target.value as ProviderId)}>
             <option value="google-calendar">Google Calendar</option>
             <option value="microsoft-outlook-calendar">Outlook Calendar</option>
           </Select>
         </div>
         <div>
-          <Label className="mb-1.5" htmlFor="connect-client-id">OAuth Client ID</Label>
+          <Label className="mb-1.5" htmlFor="connect-client-id">
+            OAuth Client ID
+          </Label>
           <Input id="connect-client-id" value={clientId} onChange={(event) => setClientId(event.target.value)} />
         </div>
         <div>
-          <Label className="mb-1.5" htmlFor="connect-client-secret">OAuth Client Secret</Label>
+          <Label className="mb-1.5" htmlFor="connect-client-secret">
+            OAuth Client Secret
+          </Label>
           <Input
             id="connect-client-secret"
             value={clientSecret}

@@ -57,9 +57,9 @@ export default function SpaApp() {
   // Load applications once the user is authorized.
   useEffect(() => {
     if (authorized) {
-      applications.loadApplications().catch((error: unknown) =>
-        showNotice('error', error instanceof Error ? error.message : 'Unable To Load CalDAV Bridge.'),
-      );
+      applications
+        .loadApplications()
+        .catch((error: unknown) => showNotice('error', error instanceof Error ? error.message : 'Unable To Load CalDAV Bridge.'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authorized]);
@@ -69,9 +69,7 @@ export default function SpaApp() {
     if (route.page === 'details' && selectedApplicationId && selectedApplicationStatus) {
       details
         .loadDetails(selectedApplicationId, selectedApplicationStatus)
-        .catch((error: unknown) =>
-          showNotice('error', error instanceof Error ? error.message : 'Unable To Load Application Details.'),
-        );
+        .catch((error: unknown) => showNotice('error', error instanceof Error ? error.message : 'Unable To Load Application Details.'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.page, selectedApplicationId, selectedApplicationStatus]);

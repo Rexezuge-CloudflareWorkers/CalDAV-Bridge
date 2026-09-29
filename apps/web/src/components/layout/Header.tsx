@@ -6,15 +6,7 @@ const TABS: { id: Route['page']; label: string }[] = [
   { id: 'connect', label: 'Connect Calendar' },
 ];
 
-export function Header({
-  route,
-  onNavigate,
-  userEmail,
-}: {
-  route: Route;
-  onNavigate: (route: Route) => void;
-  userEmail: string;
-}) {
+export function Header({ route, onNavigate, userEmail }: { route: Route; onNavigate: (route: Route) => void; userEmail: string }) {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-surface-base)]/95 backdrop-blur">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">

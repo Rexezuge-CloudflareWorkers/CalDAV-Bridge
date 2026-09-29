@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NotFoundError } from '@caldav-bridge/backend-errors';
+import type { CalendarEvent } from '@caldav-bridge/shared/model';
 import { CalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar';
 import { GoogleCalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar/GoogleCalendarProviderUtil';
 import { OutlookCalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar/OutlookCalendarProviderUtil';
@@ -91,8 +92,10 @@ describe('CalendarProviderUtil range overlap', () => {
     // The recurring-series failure this whole arrangement exists to prevent: a
     // master whose bounds are its *first* occurrence, filtered out of a recent
     // window even though it recurs into it.
-    const series = event({ start: '2026-01-05T10:00:00Z', end: '2026-01-05T11:00:00Z' });
-    series.overrides = [{ ...event({ start: '2026-05-20T10:00:00Z', end: '2026-05-20T11:00:00Z' }) }];
+    const series: CalendarEvent = {
+      ...event({ start: '2026-01-05T10:00:00Z', end: '2026-01-05T11:00:00Z' }),
+      overrides: [event({ start: '2026-05-20T10:00:00Z', end: '2026-05-20T11:00:00Z' })],
+    };
 
     expect(CalendarProviderUtil.eventOverlapsRange(series, { start: '2026-05-01T00:00:00Z', end: '2026-06-01T00:00:00Z' })).toBe(true);
   });
@@ -104,7 +107,7 @@ describe('CalendarProviderUtil range overlap', () => {
   });
 });
 
-function event(overrides: { start: string; end?: string } = { start: '2026-01-01T00:00:00Z' }) {
+function event(overrides: { start: string; end?: string } = { start: '2026-01-01T00:00:00Z' }): CalendarEvent {
   return {
     uid: 'event@example.com',
     start: { dateTime: overrides.start, timeZone: 'UTC' },

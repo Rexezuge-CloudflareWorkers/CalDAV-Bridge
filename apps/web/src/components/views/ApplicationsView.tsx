@@ -21,9 +21,13 @@ export function ApplicationsView({
         <div>
           <p className="text-xs font-bold tracking-widest uppercase text-[var(--color-accent)] mb-2">Calendar Connections</p>
           <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text-primary)]">Applications</h1>
-          <p className="text-sm text-[var(--color-text-secondary)] mt-2">Manage OAuth Calendar Applications And Open Each One For CalDAV Credentials And Calendars.</p>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-2">
+            Manage OAuth Calendar Applications And Open Each One For CalDAV Credentials And Calendars.
+          </p>
         </div>
-        <Button onClick={onConnect} size="lg" className="shrink-0">Connect Calendar</Button>
+        <Button onClick={onConnect} size="lg" className="shrink-0">
+          Connect Calendar
+        </Button>
       </Card>
 
       <Card>
@@ -36,7 +40,10 @@ export function ApplicationsView({
         {applications.length ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {applications.map((application, index) => (
-              <div key={application.applicationId} className={index === 0 ? 'animate-stagger-1' : index === 1 ? 'animate-stagger-2' : 'animate-stagger-3'}>
+              <div
+                key={application.applicationId}
+                className={index === 0 ? 'animate-stagger-1' : index === 1 ? 'animate-stagger-2' : 'animate-stagger-3'}
+              >
                 <ApplicationCard application={application} onOpen={() => onOpen(application.applicationId)} />
               </div>
             ))}

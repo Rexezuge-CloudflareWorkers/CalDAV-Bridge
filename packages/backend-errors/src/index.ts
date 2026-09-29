@@ -6,6 +6,7 @@ export { ForbiddenError } from './ForbiddenError';
 export { InternalServerError, DefaultInternalServerError } from './InternalServerError';
 export { MethodNotAllowedError } from './MethodNotAllowedError';
 export { NotFoundError } from './NotFoundError';
+export { NotImplementedError } from './NotImplementedError';
 export { PreconditionFailedError } from './PreconditionFailedError';
 export { RequestEntityTooLargeError } from './RequestEntityTooLargeError';
 export { ServiceUnavailableError } from './ServiceUnavailableError';

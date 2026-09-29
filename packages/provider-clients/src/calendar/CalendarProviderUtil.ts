@@ -34,9 +34,17 @@ class CalendarProviderUtil {
     return OutlookCalendarProviderUtil.getEvent(accessToken, calendarId, eventId);
   }
 
-  public static async upsertEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, event: CalendarEvent, providerEventId?: string): Promise<CalendarEvent> {
-    if (providerId === PROVIDER_GOOGLE_CALENDAR) return GoogleCalendarProviderUtil.upsertEvent(accessToken, calendarId, event, providerEventId);
-    return OutlookCalendarProviderUtil.upsertEvent(accessToken, calendarId, event, providerEventId);
+  public static async upsertEvent(
+    providerId: ProviderId | string,
+    accessToken: string,
+    calendarId: string,
+    event: CalendarEvent,
+    providerEventId?: string,
+    expectedEtag?: string,
+  ): Promise<CalendarEvent> {
+    if (providerId === PROVIDER_GOOGLE_CALENDAR)
+      return GoogleCalendarProviderUtil.upsertEvent(accessToken, calendarId, event, providerEventId, expectedEtag);
+    return OutlookCalendarProviderUtil.upsertEvent(accessToken, calendarId, event, providerEventId, expectedEtag);
   }
 
   public static async deleteEvent(providerId: ProviderId | string, accessToken: string, calendarId: string, eventId: string): Promise<void> {

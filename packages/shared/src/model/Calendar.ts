@@ -28,6 +28,14 @@ interface CalendarEvent {
   uid: string;
   etag?: string | undefined;
   recurrenceId?: CalendarEventDateTime | undefined;
+  /**
+   * The id of the series this occurrence belongs to, when the provider expands
+   * a recurring series into one object per occurrence. Present only on the
+   * intermediate provider model; `GoogleCalendarProviderUtil` consumes it to
+   * regroup instances into a single event with `overrides`, so it does not
+   * survive into anything a client receives.
+   */
+  recurringSeriesId?: string | undefined;
   summary?: string | undefined;
   description?: string | undefined;
   location?: string | undefined;

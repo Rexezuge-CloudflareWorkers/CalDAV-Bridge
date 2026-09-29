@@ -6,14 +6,30 @@ describe('CalDavUtil', () => {
     expect(CalDavUtil.parsePath('/dav/')).toEqual({ resource: 'root' });
     expect(CalDavUtil.parsePath('/dav/principals/app-1/')).toEqual({ resource: 'principal', applicationId: 'app-1' });
     expect(CalDavUtil.parsePath('/dav/calendars/app-1/')).toEqual({ resource: 'calendarHome', applicationId: 'app-1' });
-    expect(CalDavUtil.parsePath('/dav/calendars/app-1/cal%40example.com/')).toEqual({ resource: 'calendar', applicationId: 'app-1', calendarId: 'cal@example.com' });
-    expect(CalDavUtil.parsePath('/dav/calendars/app-1/cal%40example.com/event.ics')).toEqual({ resource: 'object', applicationId: 'app-1', calendarId: 'cal@example.com', objectHref: 'event.ics' });
-    expect(CalDavUtil.parsePath('/dav/calendars/app-1/cal-1/nested%2Fevent.ics')).toEqual({ resource: 'object', applicationId: 'app-1', calendarId: 'cal-1', objectHref: 'nested/event.ics' });
+    expect(CalDavUtil.parsePath('/dav/calendars/app-1/cal%40example.com/')).toEqual({
+      resource: 'calendar',
+      applicationId: 'app-1',
+      calendarId: 'cal@example.com',
+    });
+    expect(CalDavUtil.parsePath('/dav/calendars/app-1/cal%40example.com/event.ics')).toEqual({
+      resource: 'object',
+      applicationId: 'app-1',
+      calendarId: 'cal@example.com',
+      objectHref: 'event.ics',
+    });
+    expect(CalDavUtil.parsePath('/dav/calendars/app-1/cal-1/nested%2Fevent.ics')).toEqual({
+      resource: 'object',
+      applicationId: 'app-1',
+      calendarId: 'cal-1',
+      objectHref: 'nested/event.ics',
+    });
     expect(CalDavUtil.parsePath('/not-dav/')).toEqual({ resource: 'unknown' });
   });
 
   it('normalizes object hrefs from absolute, collection-relative, and encoded DAV hrefs', () => {
-    expect(CalDavUtil.objectHrefFromDavHref('https://example.test/dav/calendars/app-1/cal-1/nested%2Fevent.ics', 'app-1', 'cal-1')).toBe('nested/event.ics');
+    expect(CalDavUtil.objectHrefFromDavHref('https://example.test/dav/calendars/app-1/cal-1/nested%2Fevent.ics', 'app-1', 'cal-1')).toBe(
+      'nested/event.ics',
+    );
     expect(CalDavUtil.objectHrefFromDavHref('/dav/calendars/app-1/cal-1/event.ics', 'app-1', 'cal-1')).toBe('event.ics');
     expect(CalDavUtil.objectHrefFromDavHref('nested%2Fevent.ics', 'app-1', 'cal-1')).toBe('nested/event.ics');
     expect(CalDavUtil.objectHrefFromDavHref('/dav/calendars/app-2/cal-1/event.ics', 'app-1', 'cal-1')).toBeUndefined();
@@ -21,7 +37,9 @@ describe('CalDavUtil', () => {
 
   it('builds escaped collection and object hrefs', () => {
     expect(CalDavUtil.calendarHref('app 1', 'cal@example.com')).toBe('/dav/calendars/app%201/cal%40example.com/');
-    expect(CalDavUtil.objectHref('app 1', 'cal@example.com', 'nested/event.ics')).toBe('/dav/calendars/app%201/cal%40example.com/nested%2Fevent.ics');
+    expect(CalDavUtil.objectHref('app 1', 'cal@example.com', 'nested/event.ics')).toBe(
+      '/dav/calendars/app%201/cal%40example.com/nested%2Fevent.ics',
+    );
   });
 
   it('parses propfind modes, direct child properties, and Depth headers', () => {
@@ -38,11 +56,19 @@ describe('CalDavUtil', () => {
   });
 
   it('returns current principal and calendar home discovery properties', async () => {
-    const root = await CalDavUtil.propfindRoot('app-1', CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:"><D:prop><D:current-user-principal/><D:principal-URL/></D:prop></D:propfind>')).text();
+    const root = await CalDavUtil.propfindRoot(
+      'app-1',
+      CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:"><D:prop><D:current-user-principal/><D:principal-URL/></D:prop></D:propfind>'),
+    ).text();
     expect(root).toContain('<D:current-user-principal><D:href>/dav/principals/app-1/</D:href></D:current-user-principal>');
     expect(root).toContain('<D:principal-URL><D:href>/dav/principals/app-1/</D:href></D:principal-URL>');
 
-    const principal = await CalDavUtil.propfindPrincipal('app-1', CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><D:prop><C:calendar-home-set/></D:prop></D:propfind>')).text();
+    const principal = await CalDavUtil.propfindPrincipal(
+      'app-1',
+      CalDavUtil.parsePropfind(
+        '<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><D:prop><C:calendar-home-set/></D:prop></D:propfind>',
+      ),
+    ).text();
     expect(principal).toContain('<C:calendar-home-set><D:href>/dav/calendars/app-1/</D:href></C:calendar-home-set>');
   });
 
@@ -89,55 +115,42 @@ describe('CalDavUtil', () => {
     expect(response).toContain('<D:getlastmodified>Thu, 21 May 2026 09:00:00 GMT</D:getlastmodified>');
   });
 
-  it('derives calendar getctag from object tags when available', async () => {
-    const request = CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"><D:prop><CS:getctag/></D:prop></D:propfind>');
-    const first = await CalDavUtil.propfindCalendar('app-1', { id: 'cal-1', name: 'Calendar', etag: 'calendar-etag' }, request, 0, [
-      {
-        href: 'event-1.ics',
-        event: {
-          id: 'event-1',
-          uid: 'event-1@example.com',
-          etag: 'etag-1',
-          start: { dateTime: '2026-05-21T10:00:00Z' },
-          end: { dateTime: '2026-05-21T11:00:00Z' },
-        },
-      },
-    ]).text();
-    const second = await CalDavUtil.propfindCalendar('app-1', { id: 'cal-1', name: 'Calendar', etag: 'calendar-etag' }, request, 0, [
-      {
-        href: 'event-1.ics',
-        event: {
-          id: 'event-1',
-          uid: 'event-1@example.com',
-          etag: 'etag-1',
-          start: { dateTime: '2026-05-21T10:00:00Z' },
-          end: { dateTime: '2026-05-21T11:00:00Z' },
-        },
-      },
-      {
-        href: 'event-2.ics',
-        event: {
-          id: 'event-2',
-          uid: 'event-2@example.com',
-          etag: 'etag-2',
-          start: { dateTime: '2026-05-22T10:00:00Z' },
-          end: { dateTime: '2026-05-22T11:00:00Z' },
-        },
-      },
+  /**
+   * `getctag` is compared for equality, never parsed. Deriving it from the
+   * collection's highest sync version is therefore equivalent to hashing every
+   * object tag, and bounded -- the previous form concatenated a tag for every
+   * live object and every retained tombstone, so the value grew without limit
+   * and was re-serialised into every depth-one PROPFIND.
+   */
+  it('derives calendar getctag from the highest sync version', async () => {
+    const request = CalDavUtil.parsePropfind(
+      '<D:propfind xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"><D:prop><CS:getctag/></D:prop></D:propfind>',
+    );
+    const calendar = { id: 'cal-1', name: 'Calendar', etag: 'calendar-etag' };
+
+    const first = await CalDavUtil.propfindCalendar('app-1', calendar, request, 0, [{ href: 'event-1.ics', syncVersion: 4 }]).text();
+    const second = await CalDavUtil.propfindCalendar('app-1', calendar, request, 0, [{ href: 'event-1.ics', syncVersion: 7 }]).text();
+    const unchanged = await CalDavUtil.propfindCalendar('app-1', calendar, request, 0, [
+      { href: 'event-1.ics', syncVersion: 4 },
+      { href: 'event-2.ics', syncVersion: 4 },
     ]).text();
 
-    expect(first).toContain('<CS:getctag>app-1:cal-1:calendar-etag:event-1.ics:etag-1</CS:getctag>');
-    expect(second).toContain('event-2.ics:etag-2');
-    expect(second).not.toBe(first);
+    expect(first).toContain('<CS:getctag>app-1:cal-1:calendar-etag:4</CS:getctag>');
+    expect(second).toContain('<CS:getctag>app-1:cal-1:calendar-etag:7</CS:getctag>');
+    // A new object at the same version does not change the tag, which is
+    // correct: nothing about the collection's state changed.
+    expect(unchanged).toContain('<CS:getctag>app-1:cal-1:calendar-etag:4</CS:getctag>');
   });
 
-  it('derives calendar getctag from deleted object tombstones', async () => {
-    const request = CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"><D:prop><CS:getctag/></D:prop></D:propfind>');
+  it('derives calendar getctag including tombstones', async () => {
+    const request = CalDavUtil.parsePropfind(
+      '<D:propfind xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"><D:prop><CS:getctag/></D:prop></D:propfind>',
+    );
     const response = await CalDavUtil.propfindCalendar('app-1', { id: 'cal-1', name: 'Calendar', etag: 'calendar-etag' }, request, 0, [
-      { href: 'event-1.ics', status: 404, syncVersion: 2 },
+      { href: 'event-1.ics', status: 404, syncVersion: 9 },
     ]).text();
 
-    expect(response).toContain('<CS:getctag>app-1:cal-1:calendar-etag:event-1.ics:deleted:404:2</CS:getctag>');
+    expect(response).toContain('<CS:getctag>app-1:cal-1:calendar-etag:9</CS:getctag>');
   });
 
   it('returns sync-token on calendar PROPFIND', async () => {
@@ -168,16 +181,22 @@ describe('CalDavUtil', () => {
   });
 
   it('parses calendar reports', () => {
-    const multiget = CalDavUtil.parseReport('<C:calendar-multiget xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><D:prop><D:getetag/><C:calendar-data/></D:prop><D:href>/dav/calendars/app-1/cal-1/event.ics</D:href></C:calendar-multiget>');
+    const multiget = CalDavUtil.parseReport(
+      '<C:calendar-multiget xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><D:prop><D:getetag/><C:calendar-data/></D:prop><D:href>/dav/calendars/app-1/cal-1/event.ics</D:href></C:calendar-multiget>',
+    );
     expect(multiget.type).toBe('calendar-multiget');
     expect(multiget.properties).toEqual(['getetag', 'calendar-data']);
     expect(multiget.hrefs).toEqual(['/dav/calendars/app-1/cal-1/event.ics']);
 
-    const query = CalDavUtil.parseReport('<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"><C:time-range start="20260501T000000Z" end="20260601T000000Z"/></C:comp-filter></C:comp-filter></C:filter></C:calendar-query>');
+    const query = CalDavUtil.parseReport(
+      '<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"><C:time-range start="20260501T000000Z" end="20260601T000000Z"/></C:comp-filter></C:comp-filter></C:filter></C:calendar-query>',
+    );
     expect(query.type).toBe('calendar-query');
     expect(query.timeRange).toEqual({ start: '2026-05-01T00:00:00Z', end: '2026-06-01T00:00:00Z' });
 
-    const sync = CalDavUtil.parseReport('<D:sync-collection xmlns:D="DAV:"><D:sync-token>caldav-bridge:app-1:cal-1:2</D:sync-token><D:prop><D:getetag/></D:prop></D:sync-collection>');
+    const sync = CalDavUtil.parseReport(
+      '<D:sync-collection xmlns:D="DAV:"><D:sync-token>caldav-bridge:app-1:cal-1:2</D:sync-token><D:prop><D:getetag/></D:prop></D:sync-collection>',
+    );
     expect(sync.type).toBe('sync-collection');
     expect(sync.syncToken).toBe('caldav-bridge:app-1:cal-1:2');
     expect(CalDavUtil.syncVersionFromToken(sync.syncToken)).toBe(2);
@@ -208,7 +227,12 @@ describe('CalDavUtil', () => {
   });
 
   it('returns 404 responses for missing calendar-multiget objects', async () => {
-    const response = await CalDavUtil.calendarObjectReport('app-1', 'cal-1', [{ href: 'missing.ics', status: 404 }], ['getetag', 'calendar-data']).text();
+    const response = await CalDavUtil.calendarObjectReport(
+      'app-1',
+      'cal-1',
+      [{ href: 'missing.ics', status: 404 }],
+      ['getetag', 'calendar-data'],
+    ).text();
 
     expect(response).toContain('<D:href>/dav/calendars/app-1/cal-1/missing.ics</D:href>');
     expect(response).toContain('<D:status>HTTP/1.1 404 Not Found</D:status>');

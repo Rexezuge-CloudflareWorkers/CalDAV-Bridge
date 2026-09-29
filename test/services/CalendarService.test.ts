@@ -18,16 +18,31 @@ function application(): Record<string, unknown> {
 function mappingDAO(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     getByHref: vi.fn().mockResolvedValue(undefined),
-    upsert: vi.fn().mockImplementation(async (_app: string, _cal: string, href: string, providerEventId: string, uid: string, etag?: string) => ({
-      href,
-      providerEventId,
-      uid,
-      etag,
-      syncVersion: 1,
-      deletedAt: null,
+    upsert: vi
+      .fn()
+      .mockImplementation(async (_app: string, _cal: string, href: string, providerEventId: string, uid: string, etag?: string) => ({
+        href,
+        providerEventId,
+        uid,
+        etag,
+        syncVersion: 1,
+        deletedAt: null,
+      })),
+    /**
+     * Echoes what it is given, minus anything the snapshot omitted. A real
+     * collection containing a deleted object would report the delta of the
+     * removal, which is what lets the service distinguish "this sync deleted
+     * it" from "it was deleted long ago and is still inside the retention
+     * window".
+     */
+    syncSnapshot: vi.fn().mockImplementation(async (_app: string, _cal: string, events: Array<{ href: string }>) => ({
+      live: events.map((event, index) => ({ ...event, syncVersion: 3, deletedAt: null, index })),
+      deleted: [],
+      syncVersion: 3,
     })),
     markMissingProviderEventsDeleted: vi.fn().mockResolvedValue([]),
     listByCalendar: vi.fn().mockResolvedValue([]),
+    getMaxSyncVersion: vi.fn().mockResolvedValue(3),
     ...overrides,
   };
 }
@@ -42,9 +57,16 @@ describe('CalendarService', () => {
   });
 
   it('fetches provider objects and records mappings', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
-      jsonResponse({ id: 'provider-1', iCalUID: 'uid-1', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } }),
-    );
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'provider-1',
+          iCalUID: 'uid-1',
+          start: { dateTime: '2026-05-01T10:00:00Z' },
+          end: { dateTime: '2026-05-01T11:00:00Z' },
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const dao = mappingDAO();
 
@@ -76,20 +98,52 @@ describe('CalendarService', () => {
     await expect(service.requireCalendar(application() as never, 'token', 'missing')).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('syncs provider snapshots and reports mapping changes', async () => {
-    const dao = mappingDAO({
-      listByCalendar: vi.fn().mockResolvedValue([{ href: 'deleted.ics', status: 404, deletedAt: 5, syncVersion: 2, providerEventId: 'gone' }]),
-    });
+  it('reconciles a snapshot through the DAO in one call and returns its version', async () => {
+    const dao = mappingDAO();
     const service = testService();
     const events = [
-      { id: 'provider-1', uid: 'uid-1', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } },
+      {
+        id: 'provider-1',
+        uid: 'uid-1',
+        etag: 'etag-1',
+        start: { dateTime: '2026-05-01T10:00:00Z' },
+        end: { dateTime: '2026-05-01T11:00:00Z' },
+      },
     ];
 
     const synced = await service.syncProviderSnapshot(dao as never, 'app-1', 'cal-1', events as never);
 
-    expect(synced.live).toHaveLength(1);
-    expect(synced.deleted).toEqual([{ href: 'deleted.ics', status: 404, syncVersion: 2 }]);
-    expect(dao.markMissingProviderEventsDeleted).toHaveBeenCalledWith('app-1', 'cal-1', new Set(['provider-1']));
+    // One call, not a per-event upsert: the subrequest budget is what makes a
+    // full sync viable at all.
+    expect(dao.syncSnapshot).toHaveBeenCalledOnce();
+    expect(dao.syncSnapshot).toHaveBeenCalledWith('app-1', 'cal-1', [
+      { href: 'provider-1.ics', providerEventId: 'provider-1', uid: 'uid-1', etag: 'etag-1' },
+    ]);
+    expect(synced.live).toEqual([{ href: 'provider-1.ics', event: events[0], syncVersion: 3 }]);
+    expect(synced.syncVersion).toBe(3);
+  });
+
+  it('reports only the tombstones this sync produced', async () => {
+    const dao = mappingDAO({
+      syncSnapshot: vi.fn().mockResolvedValue({
+        live: [],
+        deleted: [{ href: 'gone.ics', syncVersion: 4, deletedAt: 99 }],
+        syncVersion: 4,
+      }),
+    });
+
+    const synced = await testService().syncProviderSnapshot(dao as never, 'app-1', 'cal-1', [] as never);
+
+    // Not every tombstone in the retention window -- only the delta, since
+    // re-reporting old ones told the client about deletions it already applied.
+    expect(synced.deleted).toEqual([{ href: 'gone.ics', status: 404, syncVersion: 4 }]);
+  });
+
+  it('maps changed mappings onto report results', () => {
+    const service = testService();
+    const events = [
+      { id: 'provider-1', uid: 'uid-1', start: { dateTime: '2026-05-01T10:00:00Z' }, end: { dateTime: '2026-05-01T11:00:00Z' } },
+    ];
 
     const results = service.mappingsToReportResults(
       [

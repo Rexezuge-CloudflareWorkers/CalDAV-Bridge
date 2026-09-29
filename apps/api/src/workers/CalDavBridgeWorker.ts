@@ -283,14 +283,13 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
       const calendar = await calendarService.requireCalendar(application, accessToken, path.calendarId);
       const shouldFetchObjects = depth > 0 || this.propfindNeedsCalendarObjects(propfind);
       const events = shouldFetchObjects ? await calendarService.listEvents(application, accessToken, path.calendarId) : [];
+      // The token must be the state the objects below were read at. Taking it
+      // from the sync itself keeps the two in agreement, where a second read
+      // could hand back a version newer than the objects just serialised.
       const synced = shouldFetchObjects
         ? await calendarService.syncProviderSnapshot(mappingDAO, application.applicationId, path.calendarId, events)
-        : { live: [], deleted: [] };
-      const syncToken = CalDavUtil.syncToken(
-        application.applicationId,
-        path.calendarId,
-        shouldFetchObjects ? await mappingDAO.getMaxSyncVersion(application.applicationId, path.calendarId) : 0,
-      );
+        : { live: [], deleted: [], syncVersion: await mappingDAO.getMaxSyncVersion(application.applicationId, path.calendarId) };
+      const syncToken = CalDavUtil.syncToken(application.applicationId, path.calendarId, synced.syncVersion);
       return CalDavUtil.propfindCalendar(
         application.applicationId,
         calendar,
@@ -326,9 +325,15 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     if (report.type === 'calendar-query') {
       const events = await calendarService.listEvents(application, accessToken, path.calendarId, report.timeRange);
       const isFullSnapshot = !report.timeRange?.start && !report.timeRange?.end;
+      // A time-ranged query returns a subset, so treating what is absent from
+      // it as deleted would tombstone the whole rest of the calendar. Only a
+      // full snapshot is allowed to conclude anything from an absence.
       const synced = isFullSnapshot
         ? await calendarService.syncProviderSnapshot(mappingDAO, application.applicationId, path.calendarId, events)
-        : { live: await calendarService.upsertMappings(mappingDAO, application.applicationId, path.calendarId, events), deleted: [] };
+        : {
+            live: events.map((event) => ({ href: ICalendarUtil.eventHref(event), event })),
+            deleted: [],
+          };
       return CalDavUtil.calendarObjectReport(
         application.applicationId,
         path.calendarId,
@@ -338,19 +343,25 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     }
 
     if (report.type === 'sync-collection') {
-      const events = await calendarService.listEvents(application, accessToken, path.calendarId);
-      await calendarService.syncProviderSnapshot(mappingDAO, application.applicationId, path.calendarId, events);
       const syncVersion = CalDavUtil.syncVersionFromToken(report.syncToken);
+      const events = await calendarService.listEvents(application, accessToken, path.calendarId);
+      const synced = await calendarService.syncProviderSnapshot(mappingDAO, application.applicationId, path.calendarId, events);
+      // Capture the ceiling, then report exactly the window that was captured.
+      // Selecting "everything since the client's token" and reading the maximum
+      // afterwards would report a window that had already closed: a write
+      // landing in between carries a version at or below the returned token
+      // while being absent from the results, and the next request asks for
+      // `> token`, so the client is never sent that object again.
+      const through = Math.max(synced.syncVersion, syncVersion);
+      const changedMappings = await mappingDAO.listChangedBetween(application.applicationId, path.calendarId, syncVersion, through);
       const eventByProviderId = new Map(events.map((event) => [event.id || event.uid, event]));
-      const changedMappings = await mappingDAO.listChangedSince(application.applicationId, path.calendarId, syncVersion);
       const results = calendarService.mappingsToReportResults(changedMappings, eventByProviderId);
-      const maxSyncVersion = await mappingDAO.getMaxSyncVersion(application.applicationId, path.calendarId);
       return CalDavUtil.syncCollectionReport(
         application.applicationId,
         path.calendarId,
         results,
         report.properties,
-        CalDavUtil.syncToken(application.applicationId, path.calendarId, maxSyncVersion),
+        CalDavUtil.syncToken(application.applicationId, path.calendarId, through),
       );
     }
 

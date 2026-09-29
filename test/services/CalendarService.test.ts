@@ -57,16 +57,14 @@ describe('CalendarService', () => {
   });
 
   it('fetches provider objects and records mappings', async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          id: 'provider-1',
-          iCalUID: 'uid-1',
-          start: { dateTime: '2026-05-01T10:00:00Z' },
-          end: { dateTime: '2026-05-01T11:00:00Z' },
-        }),
-      );
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        id: 'provider-1',
+        iCalUID: 'uid-1',
+        start: { dateTime: '2026-05-01T10:00:00Z' },
+        end: { dateTime: '2026-05-01T11:00:00Z' },
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     const dao = mappingDAO();
 

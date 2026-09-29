@@ -1,6 +1,50 @@
+import { InternalServerError } from '@caldav-bridge/backend-errors';
 import type { CalendarObjectMappingInternal } from '@caldav-bridge/shared/model';
 import { TimestampUtil, UUIDUtil } from '@caldav-bridge/shared/utils';
 import type { D1Queryable } from '../utils';
+import { BaseDAO } from './BaseDAO';
+
+const MAPPING_COLUMNS =
+  'object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at';
+
+/** One mapping, by its CalDAV href. */
+const SELECT_BY_HREF = `
+  SELECT ${MAPPING_COLUMNS}
+  FROM calendar_object_mappings
+  WHERE application_id = ? AND calendar_id = ? AND href = ?
+  LIMIT 1
+`;
+
+/** One mapping, by the provider's own event id. */
+const SELECT_BY_PROVIDER_EVENT_ID = `
+  SELECT ${MAPPING_COLUMNS}
+  FROM calendar_object_mappings
+  WHERE application_id = ? AND calendar_id = ? AND provider_event_id = ?
+  LIMIT 1
+`;
+
+/** Every mapping in a collection, optionally including tombstones. */
+const SELECT_BY_CALENDAR = `
+  SELECT ${MAPPING_COLUMNS}
+  FROM calendar_object_mappings
+  WHERE application_id = ? AND calendar_id = ?
+`;
+
+/**
+ * The changed window, `(since, through]`.
+ *
+ * The upper bound is not optional. A caller that selected "everything since the
+ * client's token" and then read the new maximum to hand back as the next token
+ * would report a window that had already closed: anything written in between
+ * carries a version at or below that token while being absent from the results,
+ * and because the next request asks for `> token`, the client never receives it.
+ */
+const SELECT_CHANGED = `
+  SELECT ${MAPPING_COLUMNS}
+  FROM calendar_object_mappings
+  WHERE application_id = ? AND calendar_id = ? AND sync_version > ? AND sync_version <= ?
+  ORDER BY sync_version, href
+`;
 
 interface CalendarObjectMapping {
   objectId: string;
@@ -14,36 +58,22 @@ interface CalendarObjectMapping {
   syncVersion: number;
 }
 
-class CalendarObjectMappingDAO {
-  constructor(private readonly database: D1Queryable) {}
+class CalendarObjectMappingDAO extends BaseDAO {
+  constructor(database: D1Queryable) {
+    super(database);
+  }
 
   public async getByHref(applicationId: string, calendarId: string, href: string): Promise<CalendarObjectMapping | undefined> {
-    const row = await this.database
-      .prepare(
-        `
-          SELECT object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at
-          FROM calendar_object_mappings
-          WHERE application_id = ? AND calendar_id = ? AND href = ?
-          LIMIT 1
-        `,
-      )
-      .bind(applicationId, calendarId, href)
-      .first<CalendarObjectMappingInternal>();
+    const row = await this.first<CalendarObjectMappingInternal>(SELECT_BY_HREF, [applicationId, calendarId, href]);
     return row ? this.toMapping(row) : undefined;
   }
 
-  public async getByProviderEventId(applicationId: string, calendarId: string, providerEventId: string): Promise<CalendarObjectMapping | undefined> {
-    const row = await this.database
-      .prepare(
-        `
-          SELECT object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at
-          FROM calendar_object_mappings
-          WHERE application_id = ? AND calendar_id = ? AND provider_event_id = ?
-          LIMIT 1
-        `,
-      )
-      .bind(applicationId, calendarId, providerEventId)
-      .first<CalendarObjectMappingInternal>();
+  public async getByProviderEventId(
+    applicationId: string,
+    calendarId: string,
+    providerEventId: string,
+  ): Promise<CalendarObjectMapping | undefined> {
+    const row = await this.first<CalendarObjectMappingInternal>(SELECT_BY_PROVIDER_EVENT_ID, [applicationId, calendarId, providerEventId]);
     return row ? this.toMapping(row) : undefined;
   }
 
@@ -76,9 +106,18 @@ class CalendarObjectMappingDAO {
     // are the tombstones this sync introduces, which is what the caller reports
     // -- previously the whole retained tombstone set was re-read and re-sent on
     // every full snapshot, and folded into the collection tag, without bound.
-    const tombstones = existing.filter((mapping) => !mapping.deletedAt && !events.some((event) => event.providerEventId === mapping.providerEventId));
+    const tombstones = existing.filter(
+      (mapping) => !mapping.deletedAt && !events.some((event) => event.providerEventId === mapping.providerEventId),
+    );
 
-    const changed: Array<{ href: string; providerEventId: string; uid: string; etag?: string | undefined; objectId: string; insert: boolean }> = [];
+    const changed: Array<{
+      href: string;
+      providerEventId: string;
+      uid: string;
+      etag?: string | undefined;
+      objectId: string;
+      insert: boolean;
+    }> = [];
     for (const event of events) {
       seenProviderIds.add(event.providerEventId);
       const byHref = existingByHref.get(event.href);
@@ -111,7 +150,7 @@ class CalendarObjectMappingDAO {
       syncVersion,
       now,
     );
-    if (statements.length) await this.database.batch(statements);
+    await this.batch(statements);
 
     const synced = await this.listByCalendar(applicationId, calendarId, true);
     const syncedByHref = new Map(synced.map((mapping) => [mapping.href, mapping]));
@@ -137,40 +176,56 @@ class CalendarObjectMappingDAO {
   ): D1PreparedStatement[] {
     const statements: D1PreparedStatement[] = [];
     for (const event of changed) {
-      const bindings: unknown[] = [event.objectId, applicationId, calendarId, event.href, event.providerEventId, event.uid, event.etag || null, syncVersion, now, now];
+      const bindings: unknown[] = [
+        event.objectId,
+        applicationId,
+        calendarId,
+        event.href,
+        event.providerEventId,
+        event.uid,
+        event.etag || null,
+        syncVersion,
+        now,
+        now,
+      ];
       const conflictTarget = event.insert
         ? 'ON CONFLICT(application_id, calendar_id, href) DO UPDATE SET provider_event_id = excluded.provider_event_id, uid = excluded.uid, etag = excluded.etag, deleted_at = NULL, sync_version = excluded.sync_version, updated_at = excluded.updated_at'
         : 'ON CONFLICT(object_id) DO UPDATE SET href = excluded.href, provider_event_id = excluded.provider_event_id, uid = excluded.uid, etag = excluded.etag, deleted_at = NULL, sync_version = excluded.sync_version, updated_at = excluded.updated_at';
       statements.push(
-        this.database
-          .prepare(
-            `
-              INSERT INTO calendar_object_mappings
-                (object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
-              ${conflictTarget}
-            `,
-          )
-          .bind(...bindings),
+        this.statement(
+          `
+            INSERT INTO calendar_object_mappings
+              (object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+            ${conflictTarget}
+          `,
+          bindings,
+        ),
       );
     }
     for (const href of deletedHrefs) {
       statements.push(
-        this.database
-          .prepare(
-            `
-              UPDATE calendar_object_mappings
-              SET deleted_at = ?, sync_version = ?, updated_at = ?
-              WHERE application_id = ? AND calendar_id = ? AND href = ? AND deleted_at IS NULL
-            `,
-          )
-          .bind(now, syncVersion, now, applicationId, calendarId, href),
+        this.statement(
+          `
+            UPDATE calendar_object_mappings
+            SET deleted_at = ?, sync_version = ?, updated_at = ?
+            WHERE application_id = ? AND calendar_id = ? AND href = ? AND deleted_at IS NULL
+          `,
+          [now, syncVersion, now, applicationId, calendarId, href],
+        ),
       );
     }
     return statements;
   }
 
-  public async upsert(applicationId: string, calendarId: string, href: string, providerEventId: string, uid: string, etag?: string): Promise<CalendarObjectMapping> {
+  public async upsert(
+    applicationId: string,
+    calendarId: string,
+    href: string,
+    providerEventId: string,
+    uid: string,
+    etag?: string,
+  ): Promise<CalendarObjectMapping> {
     const now = TimestampUtil.getCurrentUnixTimestampInSeconds();
     const existingProviderMapping = await this.getByProviderEventId(applicationId, calendarId, providerEventId);
     if (existingProviderMapping && existingProviderMapping.href !== href) {
@@ -186,34 +241,22 @@ class CalendarObjectMappingDAO {
 
     const syncVersion = await this.nextSyncVersion(applicationId, calendarId);
 
-    await this.database
-      .prepare(
-        `
-          INSERT INTO calendar_object_mappings
-            (object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, null, ?, ?, ?)
-        `,
-      )
-      .bind(UUIDUtil.getRandomUUID(), applicationId, calendarId, href, providerEventId, uid, etag || null, syncVersion, now, now)
-      .run();
+    await this.run(
+      `
+        INSERT INTO calendar_object_mappings
+          (object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, null, ?, ?, ?)
+      `,
+      [UUIDUtil.getRandomUUID(), applicationId, calendarId, href, providerEventId, uid, etag || null, syncVersion, now, now],
+    );
     const mapping = await this.getByHref(applicationId, calendarId, href);
-    if (!mapping) throw new Error('Failed to read calendar object mapping after upsert.');
+    if (!mapping) throw new InternalServerError('Calendar object mapping vanished immediately after being written.');
     return mapping;
   }
 
   public async listByCalendar(applicationId: string, calendarId: string, includeDeleted = false): Promise<CalendarObjectMapping[]> {
-    const rows = await this.database
-      .prepare(
-        `
-          SELECT object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at
-          FROM calendar_object_mappings
-          WHERE application_id = ? AND calendar_id = ?${includeDeleted ? '' : ' AND deleted_at IS NULL'}
-          ORDER BY href
-        `,
-      )
-      .bind(applicationId, calendarId)
-      .all<CalendarObjectMappingInternal>();
-    return (rows.results || []).map((row) => this.toMapping(row));
+    const sql = `${SELECT_BY_CALENDAR}${includeDeleted ? '' : ' AND deleted_at IS NULL'} ORDER BY href`;
+    return (await this.all<CalendarObjectMappingInternal>(sql, [applicationId, calendarId])).map((row) => this.toMapping(row));
   }
 
   /**
@@ -227,40 +270,38 @@ class CalendarObjectMappingDAO {
    * never receives it. Capturing the maximum first and then materialising
    * exactly that window is what keeps the token and its results in agreement.
    */
-  public async listChangedBetween(applicationId: string, calendarId: string, since: number, through: number): Promise<CalendarObjectMapping[]> {
-    const rows = await this.database
-      .prepare(
-        `
-          SELECT object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at
-          FROM calendar_object_mappings
-          WHERE application_id = ? AND calendar_id = ? AND sync_version > ? AND sync_version <= ?
-          ORDER BY sync_version, href
-        `,
-      )
-      .bind(applicationId, calendarId, since, through)
-      .all<CalendarObjectMappingInternal>();
-    return (rows.results || []).map((row) => this.toMapping(row));
+  public async listChangedBetween(
+    applicationId: string,
+    calendarId: string,
+    since: number,
+    through: number,
+  ): Promise<CalendarObjectMapping[]> {
+    const rows = await this.all<CalendarObjectMappingInternal>(SELECT_CHANGED, [applicationId, calendarId, since, through]);
+    return rows.map((row) => this.toMapping(row));
   }
 
   /** Tombstone every live mapping whose provider event is no longer present. Returns the newly deleted set. */
-  public async markMissingProviderEventsDeleted(applicationId: string, calendarId: string, providerEventIds: Set<string>): Promise<CalendarObjectMapping[]> {
+  public async markMissingProviderEventsDeleted(
+    applicationId: string,
+    calendarId: string,
+    providerEventIds: Set<string>,
+  ): Promise<CalendarObjectMapping[]> {
     const liveMappings = await this.listByCalendar(applicationId, calendarId);
     const missingMappings = liveMappings.filter((mapping) => !providerEventIds.has(mapping.providerEventId));
     if (!missingMappings.length) return [];
 
     const now = TimestampUtil.getCurrentUnixTimestampInSeconds();
     const syncVersion = await this.bumpSyncVersion(applicationId, calendarId);
-    await this.database.batch(
+    await this.batch(
       missingMappings.map((mapping) =>
-        this.database
-          .prepare(
-            `
-              UPDATE calendar_object_mappings
-              SET deleted_at = ?, sync_version = ?, updated_at = ?
-              WHERE application_id = ? AND calendar_id = ? AND href = ? AND deleted_at IS NULL
-            `,
-          )
-          .bind(now, syncVersion, now, applicationId, calendarId, mapping.href),
+        this.statement(
+          `
+            UPDATE calendar_object_mappings
+            SET deleted_at = ?, sync_version = ?, updated_at = ?
+            WHERE application_id = ? AND calendar_id = ? AND href = ? AND deleted_at IS NULL
+          `,
+          [now, syncVersion, now, applicationId, calendarId, mapping.href],
+        ),
       ),
     );
     return missingMappings.map((mapping) => ({ ...mapping, deletedAt: now, syncVersion }));
@@ -277,10 +318,10 @@ class CalendarObjectMappingDAO {
    * it again.
    */
   public async getMaxSyncVersion(applicationId: string, calendarId: string): Promise<number> {
-    const row = await this.database
-      .prepare('SELECT version FROM calendar_sync_counters WHERE application_id = ? AND calendar_id = ?')
-      .bind(applicationId, calendarId)
-      .first<{ version?: number | null }>();
+    const row = await this.first<{ version?: number | null }>(
+      'SELECT version FROM calendar_sync_counters WHERE application_id = ? AND calendar_id = ?',
+      [applicationId, calendarId],
+    );
     return row?.version || 0;
   }
 
@@ -293,17 +334,15 @@ class CalendarObjectMappingDAO {
    * invocation.
    */
   public async bumpSyncVersion(applicationId: string, calendarId: string): Promise<number> {
-    const row = await this.database
-      .prepare(
-        `
-          INSERT INTO calendar_sync_counters (application_id, calendar_id, version)
-          VALUES (?, ?, 1)
-          ON CONFLICT(application_id, calendar_id) DO UPDATE SET version = version + 1
-          RETURNING version
-        `,
-      )
-      .bind(applicationId, calendarId)
-      .first<{ version?: number | null }>();
+    const row = await this.first<{ version?: number | null }>(
+      `
+        INSERT INTO calendar_sync_counters (application_id, calendar_id, version)
+        VALUES (?, ?, 1)
+        ON CONFLICT(application_id, calendar_id) DO UPDATE SET version = version + 1
+        RETURNING version
+      `,
+      [applicationId, calendarId],
+    );
     return row?.version ?? 1;
   }
 
@@ -313,53 +352,45 @@ class CalendarObjectMappingDAO {
     if (mapping.deletedAt) return mapping;
     const now = TimestampUtil.getCurrentUnixTimestampInSeconds();
     const syncVersion = await this.bumpSyncVersion(applicationId, calendarId);
-    await this.database
-      .prepare(
-        `
-          UPDATE calendar_object_mappings
-          SET deleted_at = ?, sync_version = ?, updated_at = ?
-          WHERE application_id = ? AND calendar_id = ? AND href = ? AND deleted_at IS NULL
-        `,
-      )
-      .bind(now, syncVersion, now, applicationId, calendarId, href)
-      .run();
+    await this.run(
+      `
+        UPDATE calendar_object_mappings
+        SET deleted_at = ?, sync_version = ?, updated_at = ?
+        WHERE application_id = ? AND calendar_id = ? AND href = ? AND deleted_at IS NULL
+      `,
+      [now, syncVersion, now, applicationId, calendarId, href],
+    );
     return { ...mapping, deletedAt: now, syncVersion };
   }
 
   public async deleteDeletedBefore(cutoff: number, limit: number): Promise<number> {
-    const result = await this.database
-      .prepare(
-        `
-          DELETE FROM calendar_object_mappings
-          WHERE object_id IN (
-            SELECT object_id
-            FROM calendar_object_mappings
-            WHERE deleted_at IS NOT NULL AND deleted_at < ?
-            LIMIT ?
-          )
-        `,
-      )
-      .bind(cutoff, limit)
-      .run();
-    return result.meta?.changes ?? 0;
+    return this.deleteWhere(
+      `
+        DELETE FROM calendar_object_mappings
+        WHERE object_id IN (
+          SELECT object_id
+          FROM calendar_object_mappings
+          WHERE deleted_at IS NOT NULL AND deleted_at < ?
+          LIMIT ?
+        )
+      `,
+      [cutoff, limit],
+    );
   }
 
   public async deleteOrphaned(limit: number): Promise<number> {
-    const result = await this.database
-      .prepare(
-        `
-          DELETE FROM calendar_object_mappings
-          WHERE object_id IN (
-            SELECT object_id
-            FROM calendar_object_mappings
-            WHERE application_id NOT IN (SELECT application_id FROM connected_applications)
-            LIMIT ?
-          )
-        `,
-      )
-      .bind(limit)
-      .run();
-    return result.meta?.changes ?? 0;
+    return this.deleteWhere(
+      `
+        DELETE FROM calendar_object_mappings
+        WHERE object_id IN (
+          SELECT object_id
+          FROM calendar_object_mappings
+          WHERE application_id NOT IN (SELECT application_id FROM connected_applications)
+          LIMIT ?
+        )
+      `,
+      [limit],
+    );
   }
 
   private toMapping(row: CalendarObjectMappingInternal): CalendarObjectMapping {
@@ -377,7 +408,13 @@ class CalendarObjectMappingDAO {
   }
 
   private mappingMatches(mapping: CalendarObjectMapping, providerEventId: string, uid: string, etag?: string): boolean {
-    return mapping.providerEventId === providerEventId && mapping.uid === uid && (mapping.etag || null) === (etag || null) && !mapping.deletedAt && mapping.syncVersion > 0;
+    return (
+      mapping.providerEventId === providerEventId &&
+      mapping.uid === uid &&
+      (mapping.etag || null) === (etag || null) &&
+      !mapping.deletedAt &&
+      mapping.syncVersion > 0
+    );
   }
 
   private matchesSnapshot(
@@ -393,38 +430,60 @@ class CalendarObjectMappingDAO {
     );
   }
 
-  private async updateByProviderEventId(applicationId: string, calendarId: string, providerEventId: string, uid: string, etag: string | undefined, now: number): Promise<CalendarObjectMapping> {
+  private async updateByProviderEventId(
+    applicationId: string,
+    calendarId: string,
+    providerEventId: string,
+    uid: string,
+    etag: string | undefined,
+    now: number,
+  ): Promise<CalendarObjectMapping> {
     const syncVersion = await this.bumpSyncVersion(applicationId, calendarId);
-    await this.database
-      .prepare(
-        `
-          UPDATE calendar_object_mappings
-          SET uid = ?, etag = ?, deleted_at = null, sync_version = ?, updated_at = ?
-          WHERE application_id = ? AND calendar_id = ? AND provider_event_id = ?
-        `,
-      )
-      .bind(uid, etag || null, syncVersion, now, applicationId, calendarId, providerEventId)
-      .run();
+    await this.run(
+      `
+        UPDATE calendar_object_mappings
+        SET uid = ?, etag = ?, deleted_at = null, sync_version = ?, updated_at = ?
+        WHERE application_id = ? AND calendar_id = ? AND provider_event_id = ?
+      `,
+      [uid, etag || null, syncVersion, now, applicationId, calendarId, providerEventId],
+    );
     const mapping = await this.getByProviderEventId(applicationId, calendarId, providerEventId);
-    if (!mapping) throw new Error('Failed to read calendar object mapping after update.');
+    if (!mapping) throw new InternalServerError('Calendar object mapping vanished immediately after being updated.');
     return mapping;
   }
 
-  private async updateByHref(applicationId: string, calendarId: string, href: string, providerEventId: string, uid: string, etag: string | undefined, now: number): Promise<CalendarObjectMapping> {
+  private async updateByHref(
+    applicationId: string,
+    calendarId: string,
+    href: string,
+    providerEventId: string,
+    uid: string,
+    etag: string | undefined,
+    now: number,
+  ): Promise<CalendarObjectMapping> {
     const syncVersion = await this.bumpSyncVersion(applicationId, calendarId);
-    await this.database
-      .prepare(
-        `
-          UPDATE calendar_object_mappings
-          SET provider_event_id = ?, uid = ?, etag = ?, deleted_at = null, sync_version = ?, updated_at = ?
-          WHERE application_id = ? AND calendar_id = ? AND href = ?
-        `,
-      )
-      .bind(providerEventId, uid, etag || null, syncVersion, now, applicationId, calendarId, href)
-      .run();
+    await this.run(
+      `
+        UPDATE calendar_object_mappings
+        SET provider_event_id = ?, uid = ?, etag = ?, deleted_at = null, sync_version = ?, updated_at = ?
+        WHERE application_id = ? AND calendar_id = ? AND href = ?
+      `,
+      [providerEventId, uid, etag || null, syncVersion, now, applicationId, calendarId, href],
+    );
     const mapping = await this.getByHref(applicationId, calendarId, href);
-    if (!mapping) throw new Error('Failed to read calendar object mapping after update.');
+    if (!mapping) throw new InternalServerError('Calendar object mapping vanished immediately after being updated.');
     return mapping;
+  }
+
+  /**
+   * A bounded delete, reported as the number of rows removed.
+   *
+   * The reapers in `DatabaseCleanupTask` branch on that count, so it is derived
+   * from the driver's own result rather than assumed.
+   */
+  private async deleteWhere(sql: string, bindings: unknown[]): Promise<number> {
+    const result = await this.run(sql, bindings);
+    return result.meta?.changes ?? 0;
   }
 
   /**

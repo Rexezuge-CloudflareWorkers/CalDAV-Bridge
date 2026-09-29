@@ -52,7 +52,12 @@ class OAuth2AuthorizationService {
     };
   }
 
-  public async completeCallback(applicationId: string, code: string | null, state: string | null, providerError: string | null): Promise<{ redirect: string }> {
+  public async completeCallback(
+    applicationId: string,
+    code: string | null,
+    state: string | null,
+    providerError: string | null,
+  ): Promise<{ redirect: string }> {
     if (providerError) return { redirect: `/user?oauth2=error&message=${encodeURIComponent(providerError)}` };
     if (!code || !state) throw new BadRequestError('OAuth2 callback is missing code or state.');
     const sessionDAO = new OAuth2AuthorizationSessionDAO(this.env.DB);

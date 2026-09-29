@@ -51,7 +51,10 @@ describe('OAuth2AuthorizationService', () => {
   it('creates authorization sessions with PKCE and provider URLs', async () => {
     sessionSpies.create.mockResolvedValue(undefined);
 
-    const result = await new OAuth2AuthorizationService(testEnv()).createAuthorization(application() as never, 'https://bridge.example.test');
+    const result = await new OAuth2AuthorizationService(testEnv()).createAuthorization(
+      application() as never,
+      'https://bridge.example.test',
+    );
 
     expect(result.redirectUri).toBe('https://bridge.example.test/api/oauth2/callback/app-1');
     expect(result.authorizationUrl).toContain('https://accounts.google.com/o/oauth2/v2/auth');
@@ -79,18 +82,30 @@ describe('OAuth2AuthorizationService', () => {
     await expect(service.completeCallback('app-1', 'code', null, null)).rejects.toBeInstanceOf(BadRequestError);
 
     sessionSpies.getActive.mockResolvedValue(undefined);
-    await expect(service.completeCallback('app-1', 'code', 'state', null)).rejects.toThrow('OAuth2 authorization session is invalid or expired.');
+    await expect(service.completeCallback('app-1', 'code', 'state', null)).rejects.toThrow(
+      'OAuth2 authorization session is invalid or expired.',
+    );
   });
 
   it('completes valid callbacks and consumes the session', async () => {
-    sessionSpies.getActive.mockResolvedValue({ sessionId: 'sess-1', redirectUri: 'https://bridge.example.test/cb', codeVerifier: 'verifier' });
+    sessionSpies.getActive.mockResolvedValue({
+      sessionId: 'sess-1',
+      redirectUri: 'https://bridge.example.test/cb',
+      codeVerifier: 'verifier',
+    });
     sessionSpies.consume.mockResolvedValue(undefined);
     tokenSpies.completeAuthorization.mockResolvedValue(undefined);
 
     const result = await new OAuth2AuthorizationService(testEnv()).completeCallback('app-1', 'code-value', 'state-value', null);
 
     expect(result).toEqual({ redirect: '/user?oauth2=connected&applicationId=app-1' });
-    expect(tokenSpies.completeAuthorization).toHaveBeenCalledWith('app-1', 'https://bridge.example.test/cb', 'code-value', 'verifier', expect.anything());
+    expect(tokenSpies.completeAuthorization).toHaveBeenCalledWith(
+      'app-1',
+      'https://bridge.example.test/cb',
+      'code-value',
+      'verifier',
+      expect.anything(),
+    );
     expect(sessionSpies.consume).toHaveBeenCalledWith('sess-1');
   });
 });

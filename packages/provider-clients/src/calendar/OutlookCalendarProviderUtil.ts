@@ -1,8 +1,10 @@
 import { InternalServerError } from '@caldav-bridge/backend-errors';
 import type { CalendarEvent, ProviderCalendar } from '@caldav-bridge/shared/model';
 import { fetchGraphPages, fetchProviderJson } from './BaseCalendarHttp';
-import type { CalendarEventRange } from './GoogleCalendarProviderUtil';
+import { CalendarProviderUtil } from './CalendarProviderUtil';
+import type { CalendarEventRange } from './CalendarProvider';
 
+/** The Microsoft Graph implementation of `ICalendarProvider`, reached only through `CalendarProviderUtil`. */
 class OutlookCalendarProviderUtil {
   public static readonly graphTextBodyRequest: RequestInit = { headers: { Prefer: 'outlook.body-content-type="text"' } };
 
@@ -21,10 +23,24 @@ class OutlookCalendarProviderUtil {
     return calendars.map((item) => ({ id: item.id, name: item.name || item.id, readOnly: !item.canEdit, etag: item.changeKey }));
   }
 
-  public static async listEvents(accessToken: string, calendarId: string): Promise<CalendarEvent[]> {
-    const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events?$top=250`;
-    const events = await fetchGraphPages<GraphEvent>(url, accessToken, OutlookCalendarProviderUtil.graphTextBodyRequest);
-    return events.map(OutlookCalendarProviderUtil.fromGraphEvent);
+  /**
+   * List a calendar's events, optionally bounded.
+   *
+   * Graph returns a series master with the bounds of its *first* occurrence, so
+   * an overlap test on the master alone would drop every recurring series from
+   * a bounded window -- the same failure the Google client avoids by requesting
+   * expanded instances. A master with occurrences inside the window is kept, and
+   * its exceptions are attached as overrides.
+   */
+  public static async listEvents(accessToken: string, calendarId: string, range: CalendarEventRange = {}): Promise<CalendarEvent[]> {
+    const graphEvents = await OutlookCalendarProviderUtil.listRawEvents(accessToken, calendarId);
+    const events = graphEvents.map(OutlookCalendarProviderUtil.fromGraphEvent);
+    if (!range.start || !range.end) return events;
+    const inRange = await OutlookCalendarProviderUtil.listRecurrenceOverrides(accessToken, calendarId, graphEvents, events, {
+      start: range.start,
+      end: range.end,
+    });
+    return events.filter((event) => inRange.has(event.id || '') || CalendarProviderUtil.eventOverlapsRange(event, range));
   }
 
   public static async listRecurrenceOverrides(
@@ -66,7 +82,11 @@ class OutlookCalendarProviderUtil {
 
   public static async getEvent(accessToken: string, calendarId: string, eventId: string): Promise<CalendarEvent> {
     return OutlookCalendarProviderUtil.fromGraphEvent(
-      await fetchProviderJson<GraphEvent>(`https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, accessToken, OutlookCalendarProviderUtil.graphTextBodyRequest),
+      await fetchProviderJson<GraphEvent>(
+        `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+        accessToken,
+        OutlookCalendarProviderUtil.graphTextBodyRequest,
+      ),
     );
   }
 
@@ -78,7 +98,13 @@ class OutlookCalendarProviderUtil {
    * `PreconditionFailedError` -- so a concurrent edit in Outlook is reported to
    * the CalDAV client instead of being overwritten behind its back.
    */
-  public static async upsertEvent(accessToken: string, calendarId: string, event: CalendarEvent, providerEventId?: string, ifEtag?: string): Promise<CalendarEvent> {
+  public static async upsertEvent(
+    accessToken: string,
+    calendarId: string,
+    event: CalendarEvent,
+    providerEventId?: string,
+    ifEtag?: string,
+  ): Promise<CalendarEvent> {
     const url = providerEventId
       ? `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(providerEventId)}`
       : `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events`;
@@ -114,7 +140,9 @@ class OutlookCalendarProviderUtil {
       created: event.createdDateTime,
       updated: event.lastModifiedDateTime,
       recurrence: OutlookCalendarProviderUtil.fromGraphRecurrence(event.recurrence),
-      attendees: event.attendees?.map((attendee) => ({ email: attendee.emailAddress?.address || '', name: attendee.emailAddress?.name })).filter((attendee) => attendee.email),
+      attendees: event.attendees
+        ?.map((attendee) => ({ email: attendee.emailAddress?.address || '', name: attendee.emailAddress?.name }))
+        .filter((attendee) => attendee.email),
       alarms: OutlookCalendarProviderUtil.fromGraphReminder(event),
     };
   }
@@ -275,7 +303,10 @@ class OutlookCalendarProviderUtil {
 
   private static toGraphDateTime(value: CalendarEvent['start']): GraphDateTimeTimeZone {
     const timeZone = value.timeZone || 'UTC';
-    return { dateTime: OutlookCalendarProviderUtil.toGraphDateTimeValue(value.dateTime || `${value.date || ''}T00:00:00`, timeZone), timeZone: OutlookCalendarProviderUtil.toGraphTimeZone(timeZone) };
+    return {
+      dateTime: OutlookCalendarProviderUtil.toGraphDateTimeValue(value.dateTime || `${value.date || ''}T00:00:00`, timeZone),
+      timeZone: OutlookCalendarProviderUtil.toGraphTimeZone(timeZone),
+    };
   }
 
   private static toGraphDateTimeValue(value: string, timeZone: string): string {
@@ -316,12 +347,57 @@ class OutlookCalendarProviderUtil {
   };
 }
 
-interface GraphCalendar { id: string; name?: string; canEdit?: boolean; changeKey?: string }
-interface GraphEvent { id?: string; iCalUId?: string; changeKey?: string; '@odata.etag'?: string; subject?: string; body?: { content?: string; contentType?: string }; location?: { displayName?: string }; isCancelled?: boolean; start?: GraphDateTimeTimeZone; end?: GraphDateTimeTimeZone; createdDateTime?: string; lastModifiedDateTime?: string; originalStart?: string; recurrence?: GraphPatternedRecurrence | null; attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }>; isReminderOn?: boolean; reminderMinutesBeforeStart?: number | null; type?: string; seriesMasterId?: string }
-interface GraphDateTimeTimeZone { dateTime?: string; timeZone?: string }
-interface GraphPatternedRecurrence { pattern?: GraphRecurrencePattern | undefined; range?: GraphRecurrenceRange | undefined }
-interface GraphRecurrencePattern { type?: string | undefined; interval?: number | undefined; daysOfWeek?: string[] | undefined; firstDayOfWeek?: string | undefined; index?: string | undefined; dayOfMonth?: number | undefined; month?: number | undefined }
-interface GraphRecurrenceRange { type?: string | undefined; startDate?: string | undefined; endDate?: string | undefined; numberOfOccurrences?: number | undefined; recurrenceTimeZone?: string | undefined }
+interface GraphCalendar {
+  id: string;
+  name?: string;
+  canEdit?: boolean;
+  changeKey?: string;
+}
+interface GraphEvent {
+  id?: string;
+  iCalUId?: string;
+  changeKey?: string;
+  '@odata.etag'?: string;
+  subject?: string;
+  body?: { content?: string; contentType?: string };
+  location?: { displayName?: string };
+  isCancelled?: boolean;
+  start?: GraphDateTimeTimeZone;
+  end?: GraphDateTimeTimeZone;
+  createdDateTime?: string;
+  lastModifiedDateTime?: string;
+  originalStart?: string;
+  recurrence?: GraphPatternedRecurrence | null;
+  attendees?: Array<{ emailAddress?: { address?: string; name?: string }; type?: string }>;
+  isReminderOn?: boolean;
+  reminderMinutesBeforeStart?: number | null;
+  type?: string;
+  seriesMasterId?: string;
+}
+interface GraphDateTimeTimeZone {
+  dateTime?: string;
+  timeZone?: string;
+}
+interface GraphPatternedRecurrence {
+  pattern?: GraphRecurrencePattern | undefined;
+  range?: GraphRecurrenceRange | undefined;
+}
+interface GraphRecurrencePattern {
+  type?: string | undefined;
+  interval?: number | undefined;
+  daysOfWeek?: string[] | undefined;
+  firstDayOfWeek?: string | undefined;
+  index?: string | undefined;
+  dayOfMonth?: number | undefined;
+  month?: number | undefined;
+}
+interface GraphRecurrenceRange {
+  type?: string | undefined;
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+  numberOfOccurrences?: number | undefined;
+  recurrenceTimeZone?: string | undefined;
+}
 
 export { OutlookCalendarProviderUtil };
 export type { GraphCalendar, GraphDateTimeTimeZone, GraphEvent, GraphPatternedRecurrence, GraphRecurrencePattern, GraphRecurrenceRange };

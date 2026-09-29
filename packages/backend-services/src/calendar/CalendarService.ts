@@ -5,7 +5,7 @@ import { ForbiddenError, NotFoundError } from '@caldav-bridge/backend-errors';
 import { CalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar';
 import type { CalendarEvent, ConnectedApplication, ProviderCalendar } from '@caldav-bridge/shared/model';
 import { OAuth2AccessTokenService } from '../oauth2/OAuth2AccessTokenService';
-import { CalDavUtil } from './CalDavUtil';
+import { DavPathUtil } from './DavPathUtil';
 import { ICalendarUtil } from './ICalendarUtil';
 
 interface CalendarServiceEnv {
@@ -55,7 +55,12 @@ class CalendarService {
     return CalendarProviderUtil.upsertEvent(application.providerId, accessToken, calendarId, event, providerEventId, expectedEtag);
   }
 
-  public async deleteEvent(application: ConnectedApplication, accessToken: string, calendarId: string, providerEventId: string): Promise<void> {
+  public async deleteEvent(
+    application: ConnectedApplication,
+    accessToken: string,
+    calendarId: string,
+    providerEventId: string,
+  ): Promise<void> {
     return CalendarProviderUtil.deleteEvent(application.providerId, accessToken, calendarId, providerEventId);
   }
 
@@ -68,7 +73,7 @@ class CalendarService {
   ): Promise<CalendarEvent> {
     const mapping = await mappingDAO.getByHref(application.applicationId, calendarId, objectHref);
     if (mapping?.deletedAt) throw new NotFoundError('Calendar object was deleted.');
-    const providerEventId = mapping?.providerEventId || CalDavUtil.providerEventIdFromObjectHref(objectHref);
+    const providerEventId = mapping?.providerEventId || DavPathUtil.providerEventIdFromObjectHref(objectHref);
     const event = await CalendarProviderUtil.getEvent(application.providerId, accessToken, calendarId, providerEventId);
     await mappingDAO.upsert(application.applicationId, calendarId, objectHref, event.id || providerEventId, event.uid, event.etag);
     return event;
@@ -103,7 +108,11 @@ class CalendarService {
     applicationId: string,
     calendarId: string,
     events: CalendarEvent[],
-  ): Promise<{ live: Array<{ href: string; event: CalendarEvent; syncVersion?: number | undefined }>; deleted: Array<{ href: string; status: number; syncVersion?: number | undefined }>; syncVersion: number }> {
+  ): Promise<{
+    live: Array<{ href: string; event: CalendarEvent; syncVersion?: number | undefined }>;
+    deleted: Array<{ href: string; status: number; syncVersion?: number | undefined }>;
+    syncVersion: number;
+  }> {
     const snapshot = events.map((event) => ({
       href: ICalendarUtil.eventHref(event),
       providerEventId: event.id || event.uid,
@@ -131,7 +140,9 @@ class CalendarService {
     return mappings.map((mapping) => {
       if (mapping.deletedAt) return { href: mapping.href, status: 404, syncVersion: mapping.syncVersion };
       const event = eventByProviderId.get(mapping.providerEventId);
-      return event ? { href: mapping.href, event, syncVersion: mapping.syncVersion } : { href: mapping.href, status: 404, syncVersion: mapping.syncVersion };
+      return event
+        ? { href: mapping.href, event, syncVersion: mapping.syncVersion }
+        : { href: mapping.href, status: 404, syncVersion: mapping.syncVersion };
     });
   }
 }

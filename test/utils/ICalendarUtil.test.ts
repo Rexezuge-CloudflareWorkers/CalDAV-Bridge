@@ -22,7 +22,8 @@ describe('ICalendarUtil', () => {
     const ics = ICalendarUtil.toICS({
       uid: 'event-1@example.test',
       summary: 'One\\Two, Three; Four\nFive\rSix\r\nSeven',
-      description: '<html>\r\n<head>\r<meta name="color-scheme" content="light dark">\n</head>\r\n<body>change &quot;Other notifications&quot;.</body>\r\n</html>',
+      description:
+        '<html>\r\n<head>\r<meta name="color-scheme" content="light dark">\n</head>\r\n<body>change &quot;Other notifications&quot;.</body>\r\n</html>',
       location: 'Room A\r\nRoom B',
       start: { dateTime: '2026-05-04T10:00:00Z' },
       end: { dateTime: '2026-05-04T10:30:00Z' },
@@ -31,7 +32,9 @@ describe('ICalendarUtil', () => {
 
     expect(ics.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
     expect(unfolded).toContain('SUMMARY:One\\\\Two\\, Three\\; Four\\nFive\\nSix\\nSeven');
-    expect(unfolded).toContain('DESCRIPTION:<html>\\n<head>\\n<meta name="color-scheme" content="light dark">\\n</head>\\n<body>change &quot\\;Other notifications&quot\\;.</body>\\n</html>');
+    expect(unfolded).toContain(
+      'DESCRIPTION:<html>\\n<head>\\n<meta name="color-scheme" content="light dark">\\n</head>\\n<body>change &quot\\;Other notifications&quot\\;.</body>\\n</html>',
+    );
     expect(unfolded).toContain('LOCATION:Room A\\nRoom B');
   });
 
@@ -264,10 +267,7 @@ describe('ICalendarUtil', () => {
       uid: 'event-1@example.test',
       start: { dateTime: '2026-05-04T10:00:00Z' },
       end: { dateTime: '2026-05-04T10:30:00Z' },
-      attendees: [
-        { email: 'fallback@example.test' },
-        { email: 'newline@example.test', name: 'Line\r\nBreak' },
-      ],
+      attendees: [{ email: 'fallback@example.test' }, { email: 'newline@example.test', name: 'Line\r\nBreak' }],
     });
 
     expect(unfold(ics)).toContain('ATTENDEE;CN="fallback@example.test":mailto:fallback@example.test');

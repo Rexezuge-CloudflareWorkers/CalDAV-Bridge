@@ -41,7 +41,11 @@ describe('CalDavBridgeWorker scheduled tasks', () => {
       noRetry: vi.fn(),
     } as ScheduledController;
 
-    await new CalDavBridgeWorker().scheduled(scheduled, { CRON_TASKS: cronTasks } as unknown as Env, { waitUntil } as unknown as ExecutionContext);
+    await new CalDavBridgeWorker().scheduled(
+      scheduled,
+      { CRON_TASKS: cronTasks } as unknown as Env,
+      { waitUntil } as unknown as ExecutionContext,
+    );
 
     expect(cronTasks.idFromName).toHaveBeenCalledWith('global');
     expect(cronTasks.get).toHaveBeenCalledWith('cron-tasks-id');

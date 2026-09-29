@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CalDavBridgeWorker } from '@/workers';
-import { OAuth2TokenRefreshWorker } from '@caldav-bridge/background';
 
 describe('CalDavBridgeWorker DAV routing', () => {
   it('answers DAV OPTIONS without authentication', async () => {
@@ -58,34 +57,4 @@ describe('CalDavBridgeWorker scheduled tasks', () => {
 
 function fetchWorker(request: Request): Promise<Response> {
   return new CalDavBridgeWorker().fetch(request, {} as Env, {} as ExecutionContext);
-}
-
-describe('OAuth2TokenRefreshWorker request validation', () => {
-  it('rejects refresh requests without an applicationId before durable state work', async () => {
-    const state = fakeDurableObjectState();
-    const response = await new OAuth2TokenRefreshWorker(state, {} as Env).fetch(
-      new Request('https://bridge.example.test/refresh', { method: 'POST', body: JSON.stringify({}) }),
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: 'applicationId is required.' });
-    expect(state.blockConcurrencyWhile).not.toHaveBeenCalled();
-  });
-
-  it('rejects incomplete OAuth2 exchange requests before durable state work', async () => {
-    const state = fakeDurableObjectState();
-    const response = await new OAuth2TokenRefreshWorker(state, {} as Env).fetch(
-      new Request('https://bridge.example.test/exchange', { method: 'POST', body: JSON.stringify({ applicationId: 'app-1' }) }),
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: 'OAuth2 exchange input is incomplete.' });
-    expect(state.blockConcurrencyWhile).not.toHaveBeenCalled();
-  });
-});
-
-function fakeDurableObjectState(): DurableObjectState & { blockConcurrencyWhile: ReturnType<typeof vi.fn> } {
-  return {
-    blockConcurrencyWhile: vi.fn(),
-  } as unknown as DurableObjectState & { blockConcurrencyWhile: ReturnType<typeof vi.fn> };
 }

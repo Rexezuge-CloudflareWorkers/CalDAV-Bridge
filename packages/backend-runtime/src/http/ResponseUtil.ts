@@ -13,11 +13,24 @@ function textResponse(value: string, status = 200, headers: HeadersInit = {}): R
   return new Response(value, { status, headers });
 }
 
+/**
+ * A fixed message for failures whose cause must not reach the client.
+ *
+ * Internal errors routinely carry schema, table, column and provider detail in
+ * their message. That is logged, not returned: a caller needs to know the
+ * request failed, not how the store is laid out.
+ */
+const INTERNAL_ERROR_MESSAGE = 'The server encountered an internal error.';
+
 function errorResponse(error: unknown): Response {
   const status = error instanceof ServiceError ? error.getErrorCode() : 500;
-  const message = error instanceof Error ? error.message : 'Internal server error.';
-  if (status >= 500) console.error(error);
-  return jsonResponse({ error: message }, status, error instanceof ServiceError ? error.headers : undefined);
+  const headers = error instanceof ServiceError ? error.headers : undefined;
+  if (status >= 500) {
+    console.error(error);
+    return jsonResponse({ error: INTERNAL_ERROR_MESSAGE }, status, headers);
+  }
+  const message = error instanceof Error ? error.message : INTERNAL_ERROR_MESSAGE;
+  return jsonResponse({ error: message }, status, headers);
 }
 
 export { errorResponse, jsonResponse, textResponse };

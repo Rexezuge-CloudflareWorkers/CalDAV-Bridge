@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError, ServiceUnavailableError } from '@caldav-bridge/backend-errors';
+import { BadRequestError, DatabaseError, ServiceUnavailableError } from '@caldav-bridge/backend-errors';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { errorResponse, jsonResponse, textResponse } from '@caldav-bridge/backend-runtime/http';
 import { decryptData, encryptData } from '@caldav-bridge/backend-data/crypto';
@@ -60,7 +60,26 @@ describe('backend core utilities', () => {
     const throttledResponse = errorResponse(throttled);
     expect(throttledResponse.status).toBe(503);
     expect(throttledResponse.headers.get('Retry-After')).toBe('5');
-    await expect(throttledResponse.json()).resolves.toEqual({ error: 'Slow down' });
+    // 5xx bodies are fixed regardless of the error's own message: a throttling
+    // hint from an upstream provider is not something to hand to a caller, and
+    // neither is any other internal detail.
+    await expect(throttledResponse.json()).resolves.toEqual({ error: 'The server encountered an internal error.' });
+  });
+
+  it('does not leak internal error detail in a 500 response body', async () => {
+    const response = errorResponse(
+      new DatabaseError('Failed to count applications: D1_ERROR: UNIQUE constraint failed: caldav_credentials.password_hash', false),
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: 'The server encountered an internal error.' });
+  });
+
+  it('still returns the error message for a 4xx response', async () => {
+    const response = errorResponse(new BadRequestError('applicationId is required.'));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'applicationId is required.' });
   });
 
   it('generates OAuth2 state values, hashes state, and computes RFC 7636 PKCE challenges', async () => {

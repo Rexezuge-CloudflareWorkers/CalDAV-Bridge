@@ -1,3 +1,4 @@
+import { BadRequestError } from '@caldav-bridge/backend-errors';
 import type { CalendarEvent } from '@caldav-bridge/shared/model';
 
 class ICalendarUtil {
@@ -51,11 +52,30 @@ class ICalendarUtil {
     return minutes === 0 ? 'PT0M' : `-PT${minutes}M`;
   }
 
+  /**
+   * Parse a single `VEVENT` from an iCalendar body.
+   *
+   * Throws rather than guessing when the body is not a calendar. The previous
+   * behaviour fell through to `parseDateLine`'s default of "now" for a missing
+   * `DTSTART`, so `PUT` of any text at all -- the string `not a calendar`
+   * included -- parsed into a valid zero-length event and was written straight
+   * into the user's real provider calendar. A `PUT` is a write to someone's
+   * actual schedule, so an unparseable body has to fail loudly here instead.
+   */
   public static fromICS(ics: string, fallbackUid: string): CalendarEvent {
     const unfolded = ics.replace(/\r?\n[ \t]/g, '');
     const lines = unfolded.split(/\r?\n/);
-    const eventLines = ICalendarUtil.componentLines(lines, 'VEVENT') || lines;
+    if (!ICalendarUtil.componentLines(lines, 'VCALENDAR')?.length)
+      throw new BadRequestError('Request body is not wrapped in a VCALENDAR component.');
+    const eventBlocks = ICalendarUtil.componentBlocks(lines, 'VEVENT');
+    if (eventBlocks.length === 0) throw new BadRequestError('Request body does not contain a VEVENT component.');
+    // An href addresses exactly one object, so a body carrying several VEVENTs
+    // has no single meaning to write through it.
+    if (eventBlocks.length > 1) throw new BadRequestError('Request body must contain exactly one VEVENT component.');
+    const eventLines = eventBlocks[0] as string[];
     const eventPropertyLines = ICalendarUtil.withoutComponentLines(eventLines, 'VALARM');
+    if (!eventPropertyLines.some((line) => ICalendarUtil.propertyName(line) === 'DTSTART'))
+      throw new BadRequestError('VEVENT component is missing the required DTSTART property.');
     const get = (name: string): string | undefined => {
       const line = eventPropertyLines.find((item) => ICalendarUtil.propertyName(item) === name.toUpperCase());
       if (!line) return undefined;

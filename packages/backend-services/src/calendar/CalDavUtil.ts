@@ -1,7 +1,16 @@
+import { DAV_RESOURCE_MAX_BYTES } from '@caldav-bridge/shared/constants';
 import type { CalendarEvent, ProviderCalendar } from '@caldav-bridge/shared/model';
+import {
+  allElementTexts,
+  attributeValue,
+  directChildNames,
+  firstElementAttributes,
+  firstElementName,
+  firstElementText,
+} from './DavXmlScanner';
 import { ICalendarUtil } from './ICalendarUtil';
 
-type DavResourceKind = 'root' | 'principal' | 'calendarHome' | 'calendar' | 'object' | 'unknown';
+type DavResourceKind = 'root' | 'principal' | 'calendarHome' | 'calendar' | 'object' | 'unknown' | 'invalid';
 type DavPropMode = 'allprop' | 'prop' | 'propname';
 type DavReportKind = 'calendar-query' | 'calendar-multiget' | 'sync-collection' | 'unknown';
 
@@ -187,14 +196,27 @@ class CalDavUtil {
   }
 
   public static parsePath(pathname: string): DavPath {
-    const parts = pathname.split('/').filter(Boolean).map(decodeURIComponent);
+    const parts: string[] = [];
+    for (const segment of pathname.split('/')) {
+      if (!segment) continue;
+      const decoded = CalDavUtil.safeDecode(segment);
+      // A malformed escape is a broken request target, not an absent resource.
+      // Reporting it as `unknown` would answer 404 and hide a client bug.
+      if (decoded === undefined) return { resource: 'invalid' };
+      parts.push(decoded);
+    }
     if (parts[0] !== 'dav') return { resource: 'unknown' };
     if (parts.length === 1) return { resource: 'root' };
     if (parts[1] === 'principals' && parts[2] && parts.length <= 3) return { resource: 'principal', applicationId: parts[2] };
     if (parts[1] !== 'calendars' || !parts[2]) return { resource: 'unknown' };
     if (!parts[3]) return { resource: 'calendarHome', applicationId: parts[2] };
     if (!parts[4]) return { resource: 'calendar', applicationId: parts[2], calendarId: parts[3] };
-    return { resource: 'object', applicationId: parts[2], calendarId: parts[3], objectHref: parts.slice(4).join('/') };
+    const objectHref = parts.slice(4).join('/');
+    // `URL` normalises a literal `..` but not `%2e%2e`, so a traversal that
+    // survives this point would be carried into the mapping lookups and, from
+    // there, into anything that later joins an href into a path or a log line.
+    if (!CalDavUtil.isContainedObjectHref(objectHref)) return { resource: 'invalid' };
+    return { resource: 'object', applicationId: parts[2], calendarId: parts[3], objectHref };
   }
 
   public static parseDepth(value: string | null): number {
@@ -239,12 +261,18 @@ class CalDavUtil {
     }
     const path = CalDavUtil.parsePath(pathname);
     if (path.resource === 'object' && path.applicationId === applicationId && path.calendarId === calendarId) return path.objectHref;
-    if (!href.startsWith('/')) return decodeURIComponent(href);
+    // A bare relative href from a client that does not spell out the full
+    // collection path. It is still held to the same containment rule, otherwise
+    // `../../other` would be accepted as a legitimate object name.
+    if (!href.startsWith('/')) {
+      const decoded = CalDavUtil.safeDecode(href);
+      return decoded !== undefined && CalDavUtil.isContainedObjectHref(decoded) ? decoded : undefined;
+    }
     return undefined;
   }
 
   public static providerEventIdFromObjectHref(objectHref: string): string {
-    return decodeURIComponent(objectHref.replace(/\.ics$/i, ''));
+    return CalDavUtil.safeDecode(objectHref.replace(/\.ics$/i, '')) ?? '';
   }
 
   public static calendarHref(applicationId: string, calendarId: string): string {
@@ -373,7 +401,7 @@ class CalDavUtil {
       case 'supported-calendar-data':
         return '<C:supported-calendar-data><C:calendar-data content-type="text/calendar" version="2.0"/></C:supported-calendar-data>';
       case 'max-resource-size':
-        return '<C:max-resource-size>10485760</C:max-resource-size>';
+        return `<C:max-resource-size>${DAV_RESOURCE_MAX_BYTES}</C:max-resource-size>`;
       case 'getctag':
         return context.collectionTag ? `<CS:getctag>${CalDavUtil.escape(context.collectionTag)}</CS:getctag>` : undefined;
       case 'sync-token':
@@ -438,60 +466,31 @@ class CalDavUtil {
   }
 
   private static firstElementName(xml: string): string {
-    const match = /<(?!\?|!|\/)(?:[\w.-]+:)?([\w.-]+)\b/i.exec(xml);
-    return match?.[1] || '';
+    return firstElementName(xml);
   }
 
   private static extractPropNames(xml: string): string[] {
-    const match = /<(?:[\w.-]+:)?prop\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?prop>/i.exec(xml);
-    if (!match) return [];
-    return CalDavUtil.unique(CalDavUtil.directChildElementNames(match[1] || ''));
-  }
-
-  private static directChildElementNames(xml: string): string[] {
-    const names: string[] = [];
-    const tagRegex = /<\s*(\/)?\s*([^\s>/!?]+)[^>]*(\/)?\s*>/g;
-    let depth = 0;
-    let match: RegExpExecArray | null;
-    while ((match = tagRegex.exec(xml))) {
-      const closing = Boolean(match[1]);
-      const rawName = match[2] || '';
-      const selfClosing = Boolean(match[3]) || /\/\s*>$/.test(match[0]);
-      if (rawName.startsWith('?') || rawName.startsWith('!')) continue;
-      if (closing) {
-        depth = Math.max(0, depth - 1);
-        continue;
-      }
-      if (depth === 0) names.push(CalDavUtil.localName(rawName));
-      if (!selfClosing) depth += 1;
-    }
-    return names;
+    return CalDavUtil.unique(directChildNames(xml, 'prop'));
   }
 
   private static extractHrefs(xml: string): string[] {
-    const hrefs: string[] = [];
-    const regex = /<(?:[\w.-]+:)?href\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?href>/gi;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(xml))) hrefs.push(CalDavUtil.unescapeXml((match[1] || '').trim()));
-    return hrefs;
+    return allElementTexts(xml, 'href', CalDavUtil.unescapeXml);
   }
 
   private static extractElementText(xml: string, name: string): string | undefined {
-    const match = new RegExp(`<(?:[\\w.-]+:)?${name}\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?${name}>`, 'i').exec(xml);
-    return match ? CalDavUtil.unescapeXml((match[1] || '').trim()) : undefined;
+    return firstElementText(xml, name, CalDavUtil.unescapeXml);
   }
 
   private static extractTimeRange(xml: string): DavTimeRange | undefined {
-    const match = /<(?:[\w.-]+:)?time-range\b([^>]*)>/i.exec(xml);
-    if (!match) return undefined;
-    const start = CalDavUtil.attribute(match[1] || '', 'start');
-    const end = CalDavUtil.attribute(match[1] || '', 'end');
+    const attributes = firstElementAttributes(xml, 'time-range');
+    if (attributes === undefined) return undefined;
+    const start = attributeValue(attributes, 'start');
+    const end = attributeValue(attributes, 'end');
     return { start: CalDavUtil.dateTimeFromICal(start), end: CalDavUtil.dateTimeFromICal(end) };
   }
 
   private static attribute(attributes: string, name: string): string | undefined {
-    const match = new RegExp(`${name}=["']([^"']+)["']`, 'i').exec(attributes);
-    return match?.[1];
+    return attributeValue(attributes, name);
   }
 
   private static dateTimeFromICal(value?: string | undefined): string | undefined {
@@ -503,6 +502,30 @@ class CalDavUtil {
 
   private static localName(name: string): string {
     return name.includes(':') ? name.slice(name.indexOf(':') + 1) : name;
+  }
+
+  /** `undefined` marks a malformed percent-escape, which is a client error rather than a missing value. */
+  private static safeDecode(value: string): string | undefined {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Reject any href that could name something outside its own collection.
+   *
+   * Nesting is allowed because clients legitimately address objects through
+   * sub-collections, and the mapping lookups are already scoped by
+   * `applicationId`/`calendarId`. What is not allowed is a `..` component or a
+   * backslash separator: `URL` normalises a literal `..` out of a pathname but
+   * not `%2e%2e`, so a traversal that survived decoding would ride into the
+   * mapping DAO and on into anything that later joins an href into a path.
+   */
+  private static isContainedObjectHref(objectHref: string): boolean {
+    if (!objectHref || objectHref.includes('\\')) return false;
+    return !objectHref.split('/').some((segment) => segment === '.' || segment === '..');
   }
 
   private static normalizeEtag(value: string): string {
@@ -544,6 +567,8 @@ class CalDavUtil {
         return 'Conflict';
       case 412:
         return 'Precondition Failed';
+      case 413:
+        return 'Payload Too Large';
       case 415:
         return 'Unsupported Media Type';
       case 501:
@@ -555,8 +580,26 @@ class CalDavUtil {
     }
   }
 
+  /**
+   * Escape text for XML character data.
+   *
+   * Code points XML 1.0 forbids outright are dropped rather than escaped:
+   * `&#x0B;` is just as unparseable as a literal vertical tab, and there is no
+   * numeric escape a client can recover either. Outlook's HTML entity decoding
+   * turns `&#11;` in a meeting body into exactly such a character, so a single
+   * event could otherwise make the whole Multi-Status document unparseable.
+   */
   private static escape(value: string): string {
-    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return CalDavUtil.stripXmlIllegalCharacters(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  private static stripXmlIllegalCharacters(value: string): string {
+     
+    return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
   }
 
   private static unescapeXml(value: string): string {

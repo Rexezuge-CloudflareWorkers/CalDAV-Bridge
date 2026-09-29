@@ -433,18 +433,19 @@ class CalDavUtil {
     return `<D:current-user-privilege-set><D:privilege><D:read/></D:privilege>${writePrivileges}</D:current-user-privilege-set>`;
   }
 
+  /**
+   * A change token for a collection's current contents.
+   *
+   * Derived from the highest sync version the collection has issued, which
+   * changes exactly when its contents change. The previous form concatenated a
+   * tag for every live object *and* every retained tombstone, so the value grew
+   * without bound and was re-serialised into every depth-one PROPFIND. Clients
+   * only compare the tag for equality, so a bounded value is equivalent.
+   */
   private static collectionTag(applicationId: string, calendar: ProviderCalendar, objects: DavCalendarObjectResult[]): string {
     const calendarTag = calendar.etag || calendar.name;
-    const objectTags = objects
-      .map((object) => {
-        const version = object.syncVersion ? `:${object.syncVersion}` : '';
-        return object.event
-          ? `${object.href}:${object.event.etag || object.event.updated || object.event.uid}${version}`
-          : `${object.href}:deleted:${object.status || 404}${version}`;
-      })
-      .sort()
-      .join('|');
-    return `${applicationId}:${calendar.id}:${objectTags ? `${calendarTag}:${objectTags}` : calendarTag}`;
+    const highestVersion = objects.reduce((highest, object) => Math.max(highest, object.syncVersion || 0), 0);
+    return `${applicationId}:${calendar.id}:${calendarTag}:${highestVersion}`;
   }
 
   private static emptyProperty(property: string): string {

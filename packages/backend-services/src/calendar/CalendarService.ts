@@ -75,34 +75,42 @@ class CalendarService {
     if (calendar.readOnly) throw new ForbiddenError('Calendar collection is read-only.');
   }
 
-  public async upsertMappings(
-    mappingDAO: CalendarObjectMappingDAO,
-    applicationId: string,
-    calendarId: string,
-    events: CalendarEvent[],
-  ): Promise<Array<{ href: string; event: CalendarEvent }>> {
-    return Promise.all(
-      events.map((event) =>
-        mappingDAO
-          .upsert(applicationId, calendarId, ICalendarUtil.eventHref(event), event.id || event.uid, event.uid, event.etag)
-          .then((mapping) => ({ href: mapping.href, event, syncVersion: mapping.syncVersion })),
-      ),
-    );
-  }
-
+  /**
+   * Reconcile a provider snapshot against the stored mappings.
+   *
+   * The whole reconciliation is one DAO call, which is what keeps a full sync
+   * inside the platform's subrequest budget: the previous per-event
+   * read-modify-write cost five subrequests each and ran unbounded in parallel,
+   * so a calendar of a few hundred events could not sync at all.
+   *
+   * `deleted` is the delta this sync produced, not every tombstone ever
+   * retained. Reporting the retained set meant a long-lived calendar emitted a
+   * `404` element for every object that had disappeared months ago, on every
+   * full query, and folded all of them into the collection tag.
+   */
   public async syncProviderSnapshot(
     mappingDAO: CalendarObjectMappingDAO,
     applicationId: string,
     calendarId: string,
     events: CalendarEvent[],
-  ): Promise<{ live: Array<{ href: string; event: CalendarEvent; syncVersion?: number | undefined }>; deleted: Array<{ href: string; status: number; syncVersion?: number | undefined }> }> {
-    const live = await this.upsertMappings(mappingDAO, applicationId, calendarId, events);
-    const providerEventIds = new Set(events.map((event) => event.id || event.uid));
-    await mappingDAO.markMissingProviderEventsDeleted(applicationId, calendarId, providerEventIds);
-    const deletedMappings = (await mappingDAO.listByCalendar(applicationId, calendarId, true)).filter((mapping) => mapping.deletedAt);
+  ): Promise<{ live: Array<{ href: string; event: CalendarEvent; syncVersion?: number | undefined }>; deleted: Array<{ href: string; status: number; syncVersion?: number | undefined }>; syncVersion: number }> {
+    const snapshot = events.map((event) => ({
+      href: ICalendarUtil.eventHref(event),
+      providerEventId: event.id || event.uid,
+      uid: event.uid,
+      etag: event.etag,
+    }));
+    const result = await mappingDAO.syncSnapshot(applicationId, calendarId, snapshot);
+    const eventByHref = new Map(snapshot.map((event, index) => [event.href, events[index] as CalendarEvent]));
     return {
-      live,
-      deleted: deletedMappings.map((mapping) => ({ href: mapping.href, status: 404, syncVersion: mapping.syncVersion })),
+      live: result.live
+        .map((mapping) => {
+          const event = eventByHref.get(mapping.href);
+          return event ? { href: mapping.href, event, syncVersion: mapping.syncVersion } : undefined;
+        })
+        .filter((entry): entry is { href: string; event: CalendarEvent; syncVersion: number } => Boolean(entry)),
+      deleted: result.deleted.map((mapping) => ({ href: mapping.href, status: 404, syncVersion: mapping.syncVersion })),
+      syncVersion: result.syncVersion,
     };
   }
 

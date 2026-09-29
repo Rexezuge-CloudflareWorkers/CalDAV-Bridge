@@ -7,7 +7,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./CronTasksWorker": "./src/CronTasksWorker.ts",
-    "./OAuth2TokenRefreshWorker": "./src/OAuth2TokenRefreshWorker.ts",
     "./scheduled": "./src/scheduled/index.ts",
     "./scheduled/*": "./src/scheduled/*.ts"
   },

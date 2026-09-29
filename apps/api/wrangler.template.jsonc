@@ -22,10 +22,6 @@
   "durable_objects": {
     "bindings": [
       {
-        "name": "OAUTH2_TOKEN_REFRESHERS",
-        "class_name": "OAuth2TokenRefreshWorker",
-      },
-      {
         "name": "CRON_TASKS",
         "class_name": "CronTasksWorker",
       },
@@ -34,10 +30,6 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["OAuth2TokenRefreshWorker"],
-    },
-    {
-      "tag": "v2",
       "new_sqlite_classes": ["CronTasksWorker"],
     },
   ],

@@ -8,8 +8,10 @@ import {
   BadRequestError,
   MethodNotAllowedError,
   PreconditionFailedError,
+  RequestEntityTooLargeError,
   ServiceError,
   UnauthorizedError,
+  UnsupportedMediaTypeError,
 } from '@caldav-bridge/backend-errors';
 import { ApplicationService } from '@caldav-bridge/backend-services/application';
 import type { CreateApplicationInput } from '@caldav-bridge/backend-services/application';
@@ -19,6 +21,7 @@ import { OAuth2AuthorizationService } from '@caldav-bridge/backend-services/oaut
 import { UserService } from '@caldav-bridge/backend-services/user';
 import type { UserIdentity } from '@caldav-bridge/backend-services/user';
 import { BaseUrlUtil, CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
+import { DAV_REQUEST_BODY_MAX_BYTES, DAV_RESOURCE_MAX_BYTES } from '@caldav-bridge/shared/constants';
 import { validateRequestInput } from '@caldav-bridge/shared/schema';
 import type { CalendarEvent, ConnectedApplication } from '@caldav-bridge/shared/model';
 import { MiddlewareHandlers } from '@/middleware';
@@ -195,14 +198,21 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
   private async handleDav(request: Request, env: Env): Promise<Response> {
     const calendarService = new CalendarService(env);
     if (request.method === 'OPTIONS') return CalDavUtil.options();
+    // Size is checked before authentication on purpose: an oversized body is
+    // refused on its own merits, so an unauthenticated caller cannot make this
+    // server buffer one.
+    // Read once, up front: a `Request` body is single-use, and the size is
+    // checked before the text is handed to any parser or provider.
+    const body = DAV_BODY_METHODS.has(request.method) ? await readDavBody(request, davBodyLimit(request.method)) : '';
     const url = new URL(request.url);
     const path = CalDavUtil.parsePath(url.pathname);
+    if (path.resource === 'invalid') throw new BadRequestError('Malformed CalDAV request path.');
     if (path.resource === 'unknown') return CalDavUtil.notFound(url.pathname);
     const application = await this.authenticateDav(request, env, path.applicationId);
     const mappingDAO = new CalendarObjectMappingDAO(env.DB);
 
-    if (request.method === 'PROPFIND') return this.handleDavPropfind(request, env, calendarService, application, path, mappingDAO);
-    if (request.method === 'REPORT') return this.handleDavReport(request, env, calendarService, application, path, mappingDAO);
+    if (request.method === 'PROPFIND') return this.handleDavPropfind(body, request, calendarService, application, path, mappingDAO);
+    if (request.method === 'REPORT') return this.handleDavReport(body, request, calendarService, application, path, mappingDAO);
 
     if (path.resource !== 'object' || !path.calendarId || !path.objectHref)
       throw new MethodNotAllowedError('Unsupported CalDAV method for this resource.');
@@ -216,13 +226,21 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
 
     if (request.method === 'PUT') {
       await calendarService.requireWritableCalendar(application, accessToken, path.calendarId);
+      // RFC 4918 §9.7.1. Clients that send no Content-Type are common enough to
+      // accept, but one that names a different type is telling us it is not
+      // sending a calendar object, and the body is about to become a real event.
+      const contentType = request.headers.get('Content-Type')?.split(';')[0]?.trim().toLowerCase();
+      if (contentType && contentType !== 'text/calendar')
+        throw new UnsupportedMediaTypeError(`Unsupported media type: ${contentType}.`);
       const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
       const liveMapping = mapping?.deletedAt ? undefined : mapping;
       if (request.headers.get('If-None-Match')?.trim() === '*' && liveMapping)
         throw new PreconditionFailedError('Calendar object already exists.');
       if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), liveMapping?.etag || undefined))
         throw new PreconditionFailedError('Calendar object ETag does not match.');
-      const event = ICalendarUtil.fromICS(await request.text(), liveMapping?.uid || crypto.randomUUID());
+      // `fromICS` throws on anything that is not a single well-formed VEVENT, so
+      // a malformed body is rejected before it can reach the provider calendar.
+      const event = ICalendarUtil.fromICS(body, liveMapping?.uid || crypto.randomUUID());
       const saved = await calendarService.upsertEvent(application, accessToken, path.calendarId, event, liveMapping?.providerEventId);
       await mappingDAO.upsert(application.applicationId, path.calendarId, path.objectHref, saved.id || event.uid, saved.uid, saved.etag);
       return new Response(null, {
@@ -244,14 +262,14 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
   }
 
   private async handleDavPropfind(
+    body: string,
     request: Request,
-    env: Env,
     calendarService: CalendarService,
     application: ConnectedApplication,
     path: ReturnType<typeof CalDavUtil.parsePath>,
     mappingDAO: CalendarObjectMappingDAO,
   ): Promise<Response> {
-    const propfind = CalDavUtil.parsePropfind(await request.text());
+    const propfind = CalDavUtil.parsePropfind(body);
     const depth = CalDavUtil.parseDepth(request.headers.get('Depth'));
     if (path.resource === 'root') return CalDavUtil.propfindRoot(application.applicationId, propfind);
     if (path.resource === 'principal') return CalDavUtil.propfindPrincipal(application.applicationId, propfind);
@@ -283,21 +301,15 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
       );
     }
     if (path.resource === 'object' && path.calendarId && path.objectHref) {
-      const event = await calendarService.getDavObject(
-        application,
-        accessToken,
-        new CalendarObjectMappingDAO(env.DB),
-        path.calendarId,
-        path.objectHref,
-      );
+      const event = await calendarService.getDavObject(application, accessToken, mappingDAO, path.calendarId, path.objectHref);
       return CalDavUtil.propfindObject(application.applicationId, path.calendarId, path.objectHref, event, propfind);
     }
     return CalDavUtil.notFound(new URL(request.url).pathname);
   }
 
   private async handleDavReport(
+    body: string,
     request: Request,
-    env: Env,
     calendarService: CalendarService,
     application: ConnectedApplication,
     path: ReturnType<typeof CalDavUtil.parsePath>,
@@ -305,7 +317,7 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
   ): Promise<Response> {
     if (path.resource !== 'calendar' || !path.calendarId)
       throw new MethodNotAllowedError('CalDAV reports are only supported on calendar collections.');
-    const report = CalDavUtil.parseReport(await request.text());
+    const report = CalDavUtil.parseReport(body);
     if (report.type !== 'calendar-query' && report.type !== 'calendar-multiget' && report.type !== 'sync-collection')
       throw new BadRequestError('Unsupported CalDAV report.');
 
@@ -442,10 +454,39 @@ async function safeDav(action: () => Promise<Response>): Promise<Response> {
     return await action();
   } catch (error) {
     const status = error instanceof ServiceError ? error.getErrorCode() : 500;
+    if (status >= 500) {
+      // Internal failures routinely carry schema, table and provider detail in
+      // their message. It is logged rather than returned: the client needs to
+      // know the request failed, not how the store is laid out.
+      console.error(error);
+      return CalDavUtil.davError(status, 'The server encountered an internal error.', error instanceof ServiceError ? error.headers : undefined);
+    }
     const message = error instanceof Error ? error.message : 'Internal server error.';
-    if (status >= 500) console.error(error);
     return CalDavUtil.davError(status, message, error instanceof ServiceError ? error.headers : undefined);
   }
+}
+
+/** DAV methods that carry a request body worth bounding. */
+const DAV_BODY_METHODS: ReadonlySet<string> = new Set(['PROPFIND', 'REPORT', 'PUT']);
+
+function davBodyLimit(method: string): number {
+  return method === 'PUT' ? DAV_RESOURCE_MAX_BYTES : DAV_REQUEST_BODY_MAX_BYTES;
+}
+
+/**
+ * Refuse an oversized DAV body before it is buffered, parsed or forwarded.
+ *
+ * `Content-Length` is checked first so a large upload is rejected on its
+ * declared size alone. The body is then read and measured again, because that
+ * header is client-supplied: it may be absent, or simply wrong, and it is the
+ * byte count of what actually arrived that matters.
+ */
+async function readDavBody(request: Request, maxBytes: number): Promise<string> {
+  const declaredLength = Number(request.headers.get('Content-Length'));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw new RequestEntityTooLargeError();
+  const body = await request.text();
+  if (new TextEncoder().encode(body).length > maxBytes) throw new RequestEntityTooLargeError();
+  return body;
 }
 
 function redirect(location: string): Response {

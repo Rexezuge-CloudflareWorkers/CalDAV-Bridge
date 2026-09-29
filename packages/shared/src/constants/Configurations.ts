@@ -10,8 +10,23 @@ const DEFAULT_DB_CLEANUP_CALDAV_CREDENTIAL_RETENTION_DAYS = '0';
 const DEFAULT_DB_CLEANUP_CALENDAR_TOMBSTONE_RETENTION_DAYS = '90';
 const DEFAULT_DB_CLEANUP_DRAFT_APPLICATION_RETENTION_DAYS = '30';
 const DEFAULT_DB_CLEANUP_EMPTY_USER_RETENTION_DAYS = '90';
+/**
+ * Byte ceiling for a single `PROPFIND`/`REPORT` body.
+ *
+ * These carry a property list or an href list and never approach this size, so
+ * the cap costs no legitimate client anything while bounding the work a
+ * hostile one can ask for before the request is parsed at all.
+ */
+const DAV_REQUEST_BODY_MAX_BYTES = 64 * 1024;
+/** Byte ceiling for a `PUT` body. Advertised to clients as `max-resource-size`. */
+const DAV_RESOURCE_MAX_BYTES = 10 * 1024 * 1024;
+/** Ceiling on hrefs in one `calendar-multiget`; each one costs a provider round-trip. */
+const DAV_MULTIGET_MAX_HREFS = 256;
 
 export {
+  DAV_MULTIGET_MAX_HREFS,
+  DAV_REQUEST_BODY_MAX_BYTES,
+  DAV_RESOURCE_MAX_BYTES,
   DEFAULT_DEFAULT_CALDAV_CREDENTIAL_EXPIRY_DAYS,
   DEFAULT_DB_CLEANUP_BATCH_SIZE,
   DEFAULT_DB_CLEANUP_CALDAV_CREDENTIAL_RETENTION_DAYS,

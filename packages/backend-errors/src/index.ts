@@ -7,6 +7,8 @@ export { InternalServerError, DefaultInternalServerError } from './InternalServe
 export { MethodNotAllowedError } from './MethodNotAllowedError';
 export { NotFoundError } from './NotFoundError';
 export { PreconditionFailedError } from './PreconditionFailedError';
+export { RequestEntityTooLargeError } from './RequestEntityTooLargeError';
 export { ServiceUnavailableError } from './ServiceUnavailableError';
 export { UnauthorizedError } from './UnauthorizedError';
+export { UnsupportedMediaTypeError } from './UnsupportedMediaTypeError';
 export type { ErrorResponse } from './model/ErrorResponse';

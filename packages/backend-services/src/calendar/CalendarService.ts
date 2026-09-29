@@ -35,14 +35,24 @@ class CalendarService {
     return CalendarProviderUtil.listEvents(application.providerId, accessToken, calendarId, range ?? {});
   }
 
+  /**
+   * Write an event to the provider.
+   *
+   * `expectedEtag` is the etag the bridge last observed for this object, and is
+   * forwarded as a conditional write. Without it, a change made in the
+   * provider's own UI between that read and this one was overwritten with no
+   * `412` anywhere -- the client's `If-Match` was expressing precisely that
+   * intent, and it was being dropped.
+   */
   public async upsertEvent(
     application: ConnectedApplication,
     accessToken: string,
     calendarId: string,
     event: CalendarEvent,
     providerEventId?: string,
+    expectedEtag?: string,
   ): Promise<CalendarEvent> {
-    return CalendarProviderUtil.upsertEvent(application.providerId, accessToken, calendarId, event, providerEventId);
+    return CalendarProviderUtil.upsertEvent(application.providerId, accessToken, calendarId, event, providerEventId, expectedEtag);
   }
 
   public async deleteEvent(application: ConnectedApplication, accessToken: string, calendarId: string, providerEventId: string): Promise<void> {

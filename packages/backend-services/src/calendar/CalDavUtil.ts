@@ -1,3 +1,4 @@
+import { BadRequestError } from '@caldav-bridge/backend-errors';
 import { DAV_RESOURCE_MAX_BYTES } from '@caldav-bridge/shared/constants';
 import type { CalendarEvent, ProviderCalendar } from '@caldav-bridge/shared/model';
 import {
@@ -7,10 +8,23 @@ import {
   firstElementAttributes,
   firstElementName,
   firstElementText,
+  parseDavXml,
 } from './DavXmlScanner';
 import { ICalendarUtil } from './ICalendarUtil';
 
+/** Percent-decoding that reports a malformed escape instead of throwing. */
+function safeDecodeURIComponent(value: string): string | undefined {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
+}
+
 type DavResourceKind = 'root' | 'principal' | 'calendarHome' | 'calendar' | 'object' | 'unknown' | 'invalid';
+
+/** Namespace for the tokens this server issues, so a foreign one is recognisable. */
+const SYNC_TOKEN_PREFIX = 'caldav-bridge:';
 type DavPropMode = 'allprop' | 'prop' | 'propname';
 type DavReportKind = 'calendar-query' | 'calendar-multiget' | 'sync-collection' | 'unknown';
 
@@ -32,6 +46,8 @@ interface DavReportRequest {
   hrefs: string[];
   syncToken?: string | undefined;
   timeRange?: DavTimeRange | undefined;
+  /** Set when a `calendar-query` filter names something this server cannot evaluate. */
+  unsupportedFilter?: string | undefined;
 }
 
 interface DavTimeRange {
@@ -54,6 +70,15 @@ interface DavPropertyContext {
   syncToken?: string | undefined;
   event?: CalendarEvent | undefined;
   objectHref?: string | undefined;
+  /**
+   * The event's iCalendar body, serialised at most once per response.
+   *
+   * `allprop` on an object asks for both `calendar-data` and `getcontentlength`,
+   * and the latter needs the same bytes. Memoised here rather than recomputed
+   * per property, which was two full serialisations for every object in a
+   * depth-one PROPFIND.
+   */
+  ics?: string | undefined;
 }
 
 class CalDavUtil {
@@ -219,8 +244,18 @@ class CalDavUtil {
     return { resource: 'object', applicationId: parts[2], calendarId: parts[3], objectHref };
   }
 
+  /**
+   * The `Depth` header as a level.
+   *
+   * RFC 4918 §9.1 lets a server refuse `infinity`, but it must then answer as
+   * `1` rather than `0`. Returning `0` silently under-reports: a client that
+   * asks for the members of a calendar collection and receives only the
+   * collection discovers no events at all, and shows an empty calendar with
+   * nothing to indicate why.
+   */
   public static parseDepth(value: string | null): number {
-    if (value === '1') return 1;
+    const normalized = (value ?? '').trim().toLowerCase();
+    if (normalized === '1' || normalized === 'infinity') return 1;
     return 0;
   }
 
@@ -230,26 +265,130 @@ class CalDavUtil {
     return { mode: 'prop', properties: CalDavUtil.extractPropNames(body) };
   }
 
+  /**
+   * Parse a REPORT body.
+   *
+   * A `calendar-query` filter is validated here rather than being partially
+   * ignored. Only `VCALENDAR/VEVENT` with an optional `time-range` is
+   * evaluable; a filter on `VALARM`, a `text-match`, or a component this server
+   * does not model would otherwise be dropped and the server would return events
+   * that do *not* match what the client asked for, which RFC 4791 §7.8 forbids.
+   * A filter that cannot be honoured is reported so the caller can answer `403`
+   * with a `valid-filter` precondition.
+   */
   public static parseReport(body: string): DavReportRequest {
     const rootName = CalDavUtil.firstElementName(body);
     const type = rootName === 'calendar-query' || rootName === 'calendar-multiget' || rootName === 'sync-collection' ? rootName : 'unknown';
+    const filter = type === 'calendar-query' ? CalDavUtil.parseQueryFilter(body) : undefined;
     return {
       type,
       properties: CalDavUtil.extractPropNames(body),
       hrefs: CalDavUtil.extractHrefs(body),
-      syncToken: CalDavUtil.extractElementText(body, 'sync-token'),
-      timeRange: CalDavUtil.extractTimeRange(body),
+      // Only the direct child of `<D:sync>` is a request token. Matching the
+      // first `sync-token` anywhere would pick up a property of the same name
+      // nested in `<D:prop>`.
+      syncToken: CalDavUtil.extractSyncToken(body),
+      timeRange: filter?.timeRange,
+      unsupportedFilter: filter?.unsupported,
     };
   }
 
-  public static syncToken(applicationId: string, calendarId: string, syncVersion: number): string {
-    return `caldav-bridge:${encodeURIComponent(applicationId)}:${encodeURIComponent(calendarId)}:${Math.max(0, Math.trunc(syncVersion))}`;
+  /**
+   * The request's sync token, from `<D:sync>` or the report root.
+   *
+   * Only direct children count. Taking the first `sync-token` anywhere in the
+   * body -- as the previous implementation did -- would pick up a property of
+   * the same name requested inside `<D:prop>`, and use it as the client's
+   * position. RFC 4791 §7.2 places it under `<D:sync>`, but the report root is
+   * accepted too because clients send it there and it is unambiguous there.
+   */
+  private static extractSyncToken(xml: string): string | undefined {
+    const document = parseDavXml(xml);
+    for (let index = 0; index < document.tags.length; index += 1) {
+      const tag = document.tags[index];
+      if (tag.closing || (tag.localName !== 'sync' && index !== 0)) continue;
+      for (const child of document.tags) {
+        if (child.closing || child.parent !== index || child.localName !== 'sync-token') continue;
+        const text = CalDavUtil.unescapeXml(document.source.slice(child.contentStart, child.contentEnd).trim());
+        if (text) return text;
+      }
+    }
+    return undefined;
   }
 
-  public static syncVersionFromToken(syncToken?: string | undefined): number {
-    if (!syncToken) return 0;
-    const version = Number(syncToken.split(':').pop());
-    return Number.isFinite(version) && version > 0 ? Math.trunc(version) : 0;
+  /**
+   * Read a `calendar-query` filter, or record that it cannot be evaluated.
+   *
+   * Nesting is what the shape check is for: the filter must be exactly
+   * `VCALENDAR > VEVENT`, optionally carrying a single `time-range`. Anything
+   * deeper, or any other `comp-filter`, is beyond what this server models.
+   */
+  private static parseQueryFilter(xml: string): { timeRange?: DavTimeRange | undefined; unsupported?: string } {
+    const document = parseDavXml(xml);
+    const calendarFilter = document.tags.find((tag) => !tag.closing && tag.localName === 'comp-filter');
+    if (!calendarFilter) return { unsupported: 'missing comp-filter' };
+    const calendarIndex = document.tags.indexOf(calendarFilter);
+    const children = document.tags.filter((tag) => !tag.closing && tag.parent === calendarIndex);
+    if (attributeValue(calendarFilter.attributes, 'name') !== 'VCALENDAR') return { unsupported: 'unsupported calendar component' };
+
+    for (const child of children) {
+      const childIndex = document.tags.indexOf(child);
+      if (child.localName !== 'comp-filter') return { unsupported: `unsupported filter element: ${child.localName}` };
+      if (attributeValue(child.attributes, 'name') !== 'VEVENT') return { unsupported: 'unsupported event component' };
+      const grandChildren = document.tags.filter((tag) => !tag.closing && tag.parent === childIndex);
+      for (const leaf of grandChildren) {
+        if (leaf.localName !== 'time-range') return { unsupported: `unsupported filter element: ${leaf.localName}` };
+      }
+      const timeRange = CalDavUtil.extractTimeRange(document.source.slice(child.contentStart, child.contentEnd));
+      if (timeRange) return { timeRange };
+    }
+    return {};
+  }
+
+  public static syncToken(applicationId: string, calendarId: string, syncVersion: number): string {
+    return `${SYNC_TOKEN_PREFIX}${encodeURIComponent(applicationId)}:${encodeURIComponent(calendarId)}:${Math.max(0, Math.trunc(syncVersion))}`;
+  }
+
+  /** The `403` a `sync-collection` earns with a token this collection did not issue. */
+  public static invalidSyncToken(): Response {
+    const headers = new Headers({ 'Content-Type': 'application/xml; charset=utf-8', DAV: '1, 3, calendar-access' });
+    return new Response('<?xml version="1.0" encoding="utf-8"?><D:error xmlns:D="DAV:"><D:valid-sync-token/></D:error>', { status: 403, headers });
+  }
+
+  /**
+   * The `403` a `calendar-query` earns with a filter this server cannot evaluate.
+   *
+   * RFC 4791 §7.8 requires a `valid-filter` precondition rather than a best-effort
+   * answer, because a partial answer is indistinguishable from a complete one
+   * and the client cannot tell that events are missing.
+   */
+  public static invalidFilter(reason: string): Response {
+    const headers = new Headers({ 'Content-Type': 'application/xml; charset=utf-8', DAV: '1, 3, calendar-access' });
+    // `valid-filter` is a precondition in the CalDAV namespace, not DAV.
+    const body = `<?xml version="1.0" encoding="utf-8"?><D:error xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><C:valid-filter/><D:responsedescription>${CalDavUtil.escape(reason)}</D:responsedescription></D:error>`;
+    return new Response(body, { status: 403, headers });
+  }
+
+  /**
+   * A sync token, and the version it encodes.
+   *
+   * The token is bound to the collection it was issued for. RFC 4791 §7.2
+   * requires a token from a different collection to be refused with `403` and a
+   * `<D:valid-sync-token/>` precondition, so a client that has lost its state is
+   * told to re-provision rather than being handed a full collection as though
+   * it had asked for a delta. An absent token is the one legitimate exception:
+   * it is how a client starts a sync.
+   */
+  public static parseSyncToken(syncToken: string | undefined, applicationId: string, calendarId: string): { version: number } | { invalid: true } {
+    if (!syncToken) return { version: 0 };
+    if (!syncToken.startsWith(SYNC_TOKEN_PREFIX)) return { invalid: true };
+    const parts = syncToken.slice(SYNC_TOKEN_PREFIX.length).split(':');
+    if (parts.length !== 3) return { invalid: true };
+    const [tokenApplicationId, tokenCalendarId, rawVersion] = parts;
+    if (safeDecodeURIComponent(tokenApplicationId) !== applicationId) return { invalid: true };
+    if (safeDecodeURIComponent(tokenCalendarId) !== calendarId) return { invalid: true };
+    if (!/^\d+$/.test(rawVersion as string)) return { invalid: true };
+    return { version: Number(rawVersion) };
   }
 
   public static objectHrefFromDavHref(href: string, applicationId: string, calendarId: string): string | undefined {
@@ -293,12 +432,42 @@ class CalDavUtil {
     return `"${trimmed.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   }
 
-  public static etagMatches(condition: string | null, currentEtag?: string | undefined): boolean {
+  /**
+   * Evaluate a conditional header against the current ETag.
+   *
+   * `If-Match` is compared with the *strong* function RFC 7232 §3.1 requires:
+   * `W/"x"` does not match a resource whose ETag is `"x"`, because weak
+   * comparison is only appropriate where byte-identity is not required.
+   * `If-None-Match` uses the weak function, so a `W/` prefix is ignored there.
+   */
+  public static etagMatches(condition: string | null, currentEtag?: string | undefined, mode: 'strong' | 'weak' = 'strong'): boolean {
     if (!condition) return true;
-    if (condition.trim() === '*') return Boolean(currentEtag);
+    const trimmed = condition.trim();
+    if (trimmed === '*') return Boolean(currentEtag);
     if (!currentEtag) return false;
-    const normalizedCurrent = CalDavUtil.normalizeEtag(currentEtag);
-    return condition.split(',').some((item) => CalDavUtil.normalizeEtag(item) === normalizedCurrent);
+    const normalize = mode === 'strong' ? CalDavUtil.strongEtag : CalDavUtil.weakEtag;
+    return CalDavUtil.parseEtagList(trimmed).some((candidate) => normalize(candidate) === normalize(currentEtag));
+  }
+
+  /**
+   * Split a comma-separated ETag list.
+   *
+   * `split(',')` is wrong: an entity tag may contain a comma (`W/"a,b"`), so a
+   * naive split yields fragments that match nothing. Each element is a quoted
+   * string or `*`, and the quote is what delimits it.
+   */
+  private static parseEtagList(condition: string): string[] {
+    return (condition.match(/(?:W\/)?"(?:[^"\\]|\\.)*"|\*/g) ?? []).map((item) => item.trim()).filter(Boolean);
+  }
+
+  /** ETag identity for strong comparison: the `W/` prefix is significant. */
+  private static strongEtag(value: string): string {
+    return CalDavUtil.quoteEtag(value.trim());
+  }
+
+  /** ETag identity for weak comparison: `W/` is not significant. */
+  private static weakEtag(value: string): string {
+    return CalDavUtil.quoteEtag(value.replace(/^W\//, '').trim());
   }
 
   public static allowHeader(): string {
@@ -357,7 +526,10 @@ class CalDavUtil {
         'supported-report-set',
       ];
     }
-    if (resource === 'object') return ['resourcetype', 'getetag', 'getcontenttype', 'getcontentlength', 'getlastmodified'];
+    // `calendar-data` belongs in `allprop` for an object: RFC 4791 §5.2.4
+    // recommends it, and clients that populate from `allprop` would otherwise
+    // receive metadata with no event body and show an empty entry.
+    if (resource === 'object') return ['resourcetype', 'getetag', 'getcontenttype', 'getcontentlength', 'getlastmodified', 'calendar-data'];
     return [];
   }
 
@@ -415,12 +587,21 @@ class CalDavUtil {
         return event ? `<D:getetag>${CalDavUtil.escape(CalDavUtil.eventEtag(event))}</D:getetag>` : undefined;
       case 'getcontenttype':
         return event ? '<D:getcontenttype>text/calendar; charset=utf-8</D:getcontenttype>' : undefined;
-      case 'getcontentlength':
-        return event ? `<D:getcontentlength>${CalDavUtil.byteLength(ICalendarUtil.toICS(event))}</D:getcontentlength>` : undefined;
+      case 'getcontentlength': {
+        if (!event) return undefined;
+        // `allprop` asks for this alongside `calendar-data`, so the body is
+        // serialised once per object rather than twice.
+        const ics = event ? ICalendarUtil.toICS(event) : undefined;
+        context.ics ??= ics;
+        return `<D:getcontentlength>${CalDavUtil.byteLength(ics as string)}</D:getcontentlength>`;
+      }
       case 'getlastmodified':
         return event ? `<D:getlastmodified>${CalDavUtil.escape(CalDavUtil.httpDate(event.updated || event.created || event.start.dateTime || event.start.date))}</D:getlastmodified>` : undefined;
-      case 'calendar-data':
-        return event ? `<C:calendar-data>${CalDavUtil.escape(ICalendarUtil.toICS(event))}</C:calendar-data>` : undefined;
+      case 'calendar-data': {
+        if (!event) return undefined;
+        context.ics ??= ICalendarUtil.toICS(event);
+        return `<C:calendar-data>${CalDavUtil.escape(context.ics)}</C:calendar-data>`;
+      }
       default:
         return undefined;
     }
@@ -482,23 +663,50 @@ class CalDavUtil {
     return firstElementText(xml, name, CalDavUtil.unescapeXml);
   }
 
+  /**
+   * The `time-range` of a query, as ISO instants.
+   *
+   * Both bounds are validated. An unparseable value used to be passed through
+   * verbatim, where `new Date('20260501')` yields an Invalid Date, the bound
+   * silently became unbounded, and the query returned the whole calendar as
+   * though a narrow window had been asked for. A range that is inverted is
+   * rejected too, rather than quietly matching nothing.
+   */
   private static extractTimeRange(xml: string): DavTimeRange | undefined {
     const attributes = firstElementAttributes(xml, 'time-range');
     if (attributes === undefined) return undefined;
-    const start = attributeValue(attributes, 'start');
-    const end = attributeValue(attributes, 'end');
-    return { start: CalDavUtil.dateTimeFromICal(start), end: CalDavUtil.dateTimeFromICal(end) };
+    const start = CalDavUtil.dateTimeFromICal(attributeValue(attributes, 'start'));
+    const end = CalDavUtil.dateTimeFromICal(attributeValue(attributes, 'end'));
+    if (CalDavUtil.isUnparseableBound(start) || CalDavUtil.isUnparseableBound(end)) throw new BadRequestError('time-range bound is not a valid date or date-time.');
+    if (start && end && new Date(start).getTime() > new Date(end).getTime())
+      throw new BadRequestError('time-range start must not be after its end.');
+    return { start, end };
+  }
+
+  /** A bound the server could not turn into a moment in time. */
+  private static isUnparseableBound(value: string | undefined): boolean {
+    return value !== undefined && Number.isNaN(new Date(value).getTime());
   }
 
   private static attribute(attributes: string, name: string): string | undefined {
     return attributeValue(attributes, name);
   }
 
+  /**
+   * Normalise an iCalendar date or date-time to an ISO instant.
+   *
+   * RFC 4791 requires UTC date-times, but DATE values (`20260501`) and values
+   * with a trailing `Z` are both legal to receive, so each is rewritten into
+   * something `Date` parses. Anything left unrecognised is returned as-is for
+   * the caller to reject, rather than being coerced into a plausible instant.
+   */
   private static dateTimeFromICal(value?: string | undefined): string | undefined {
     if (!value) return undefined;
-    const match = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/.exec(value);
-    if (!match) return value;
-    return `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}Z`;
+    const dateOnly = /^(\d{4})(\d{2})(\d{2})$/.exec(value);
+    if (dateOnly) return `${dateOnly[1]}-${dateOnly[2]}-${dateOnly[3]}T00:00:00Z`;
+    const dateTime = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/.exec(value);
+    if (!dateTime) return value;
+    return `${dateTime[1]}-${dateTime[2]}-${dateTime[3]}T${dateTime[4]}:${dateTime[5]}:${dateTime[6]}Z`;
   }
 
   private static localName(name: string): string {
@@ -507,11 +715,7 @@ class CalDavUtil {
 
   /** `undefined` marks a malformed percent-escape, which is a client error rather than a missing value. */
   private static safeDecode(value: string): string | undefined {
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return undefined;
-    }
+    return safeDecodeURIComponent(value);
   }
 
   /**
@@ -527,10 +731,6 @@ class CalDavUtil {
   private static isContainedObjectHref(objectHref: string): boolean {
     if (!objectHref || objectHref.includes('\\')) return false;
     return !objectHref.split('/').some((segment) => segment === '.' || segment === '..');
-  }
-
-  private static normalizeEtag(value: string): string {
-    return CalDavUtil.quoteEtag(value.replace(/^W\//, '').trim()).replace(/^W\//, '');
   }
 
   private static httpDate(value?: string | undefined): string {

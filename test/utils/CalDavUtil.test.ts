@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CalDavUtil } from '@caldav-bridge/backend-services/calendar';
+import { BadRequestError } from '@caldav-bridge/backend-errors';
 
 describe('CalDavUtil', () => {
   it('parses DAV resource paths', () => {
@@ -45,14 +46,20 @@ describe('CalDavUtil', () => {
   it('parses propfind modes, direct child properties, and Depth headers', () => {
     expect(CalDavUtil.parsePropfind('')).toEqual({ mode: 'allprop', properties: [] });
     expect(CalDavUtil.parsePropfind('<D:propfind xmlns:D="DAV:"><D:propname/></D:propfind>')).toEqual({ mode: 'propname', properties: [] });
+    // RFC 4918 §9.1 allows refusing `infinity`, but then as `1`. Answering `0`
+    // silently under-reports: a client that asked for a collection's members and
+    // received only the collection discovers no events, and shows an empty
+    // calendar with nothing to indicate why.
+    expect(CalDavUtil.parseDepth('infinity')).toBe(1);
+    expect(CalDavUtil.parseDepth(' 1 ')).toBe(1);
+    expect(CalDavUtil.parseDepth('INFINITY')).toBe(1);
+    expect(CalDavUtil.parseDepth('0')).toBe(0);
+    expect(CalDavUtil.parseDepth(null)).toBe(0);
     expect(
       CalDavUtil.parsePropfind(
         '<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><D:prop><D:getetag/><C:calendar-data><C:expand/></C:calendar-data><D:getetag/></D:prop></D:propfind>',
       ),
     ).toEqual({ mode: 'prop', properties: ['getetag', 'calendar-data'] });
-    expect(CalDavUtil.parseDepth('1')).toBe(1);
-    expect(CalDavUtil.parseDepth('infinity')).toBe(0);
-    expect(CalDavUtil.parseDepth(null)).toBe(0);
   });
 
   it('returns current principal and calendar home discovery properties', async () => {
@@ -199,7 +206,103 @@ describe('CalDavUtil', () => {
     );
     expect(sync.type).toBe('sync-collection');
     expect(sync.syncToken).toBe('caldav-bridge:app-1:cal-1:2');
-    expect(CalDavUtil.syncVersionFromToken(sync.syncToken)).toBe(2);
+    expect(CalDavUtil.parseSyncToken(sync.syncToken, 'app-1', 'cal-1')).toEqual({ version: 2 });
+
+    // The token under `<D:sync>`, where RFC 4791 §7.2 places it.
+    const wrapped = CalDavUtil.parseReport(
+      '<D:sync-collection xmlns:D="DAV:"><D:sync><D:sync-token>caldav-bridge:app-1:cal-1:3</D:sync-token></D:sync><D:prop><D:getetag/></D:prop></D:sync-collection>',
+    );
+    expect(wrapped.syncToken).toBe('caldav-bridge:app-1:cal-1:3');
+  });
+
+  it('reads the request sync token only from a direct child, never from a property', () => {
+    // A `sync-token` requested inside `<D:prop>` is a property to be returned,
+    // not the client's position. Reading it as the position would restart the
+    // client from a version it never held.
+    const report = CalDavUtil.parseReport(
+      '<D:sync-collection xmlns:D="DAV:"><D:prop><D:sync-token/><D:getetag/></D:prop></D:sync-collection>',
+    );
+    expect(report.syncToken).toBeUndefined();
+  });
+
+  describe('sync token validation', () => {
+    it('accepts an absent token, which is how a client starts a sync', () => {
+      expect(CalDavUtil.parseSyncToken(undefined, 'app-1', 'cal-1')).toEqual({ version: 0 });
+      expect(CalDavUtil.parseSyncToken('', 'app-1', 'cal-1')).toEqual({ version: 0 });
+    });
+
+    it('accepts its own token for the collection that issued it', () => {
+      const token = CalDavUtil.syncToken('app-1', 'cal-1', 7);
+      expect(CalDavUtil.parseSyncToken(token, 'app-1', 'cal-1')).toEqual({ version: 7 });
+    });
+
+    // Only the trailing integer used to be read, so a token from one collection
+    // was accepted on another and could jump the cursor, skipping changes.
+    it('rejects a token issued for a different collection', () => {
+      const token = CalDavUtil.syncToken('app-1', 'cal-1', 9);
+      expect(CalDavUtil.parseSyncToken(token, 'app-1', 'cal-2')).toEqual({ invalid: true });
+      expect(CalDavUtil.parseSyncToken(token, 'app-2', 'cal-1')).toEqual({ invalid: true });
+    });
+
+    it('rejects a corrupt or foreign token', () => {
+      for (const token of [
+        'abc',
+        'caldav-bridge:app-1:cal-1',
+        'caldav-bridge:app-1:cal-1:x',
+        'other:app-1:cal-1:2',
+        'caldav-bridge::cal-1:2',
+        'caldav-bridge:app-1:cal-1:2:extra',
+      ]) {
+        expect(CalDavUtil.parseSyncToken(token, 'app-1', 'cal-1')).toEqual({ invalid: true });
+      }
+    });
+  });
+
+  describe('query filter handling', () => {
+    it('accepts the filter shape it can evaluate', () => {
+      const report = CalDavUtil.parseReport(
+        '<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"/></C:comp-filter></C:filter></C:calendar-query>',
+      );
+      expect(report.unsupportedFilter).toBeUndefined();
+    });
+
+    // Silently dropping an unevaluable filter means returning events that do not
+    // match what the client asked for, which RFC 4791 §7.8 forbids and the
+    // client cannot detect.
+    it.each([
+      ['<C:comp-filter name="VTODO"><C:comp-filter name="VTODO"/></C:comp-filter>'],
+      ['<C:comp-filter name="VCALENDAR"><C:comp-filter name="VALARM"/></C:comp-filter>'],
+      [
+        '<C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"><C:time-range start="20260501T000000Z"/><C:text-match collation="i">x</C:text-match></C:comp-filter></C:comp-filter>',
+      ],
+    ])('reports %s as unevaluable', (filter) => {
+      const report = CalDavUtil.parseReport(
+        `<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"><C:filter>${filter}</C:filter></C:calendar-query>`,
+      );
+      expect(report.unsupportedFilter).toBeTruthy();
+    });
+  });
+
+  describe('time-range validation', () => {
+    it('normalises date and date-time bounds to ISO instants', () => {
+      const report = CalDavUtil.parseReport(
+        '<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"><C:time-range start="20260501" end="20260601T120000Z"/></C:comp-filter></C:comp-filter></C:filter></C:calendar-query>',
+      );
+      expect(report.timeRange).toEqual({ start: '2026-05-01T00:00:00Z', end: '2026-06-01T12:00:00Z' });
+    });
+
+    // An unparseable bound became ±Infinity, so a bounded query silently
+    // returned the whole calendar.
+    it('rejects an unparseable or inverted range', () => {
+      for (const range of [
+        '<C:time-range start="not-a-date"/>',
+        '<C:time-range end="20261345T000000Z"/>',
+        '<C:time-range start="20260601T000000Z" end="20260501T000000Z"/>',
+      ]) {
+        const body = `<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT">${range}</C:comp-filter></C:comp-filter></C:filter></C:calendar-query>`;
+        expect(() => CalDavUtil.parseReport(body)).toThrow(BadRequestError);
+      }
+    });
   });
 
   it('returns quoted etags and calendar data in object reports', async () => {

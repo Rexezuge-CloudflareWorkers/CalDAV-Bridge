@@ -70,13 +70,23 @@ class OutlookCalendarProviderUtil {
     );
   }
 
-  public static async upsertEvent(accessToken: string, calendarId: string, event: CalendarEvent, providerEventId?: string): Promise<CalendarEvent> {
+  /**
+   * Create or update an event.
+   *
+   * `ifEtag` carries the stored `changeKey` as a conditional write. Graph
+   * answers a stale one with `412`, which the caller maps to
+   * `PreconditionFailedError` -- so a concurrent edit in Outlook is reported to
+   * the CalDAV client instead of being overwritten behind its back.
+   */
+  public static async upsertEvent(accessToken: string, calendarId: string, event: CalendarEvent, providerEventId?: string, ifEtag?: string): Promise<CalendarEvent> {
     const url = providerEventId
       ? `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(providerEventId)}`
       : `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events`;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (ifEtag) headers['If-Match'] = ifEtag;
     const data = await fetchProviderJson<GraphEvent>(url, accessToken, {
       method: providerEventId ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(OutlookCalendarProviderUtil.toGraphEvent(event)),
     });
     return OutlookCalendarProviderUtil.fromGraphEvent(data);

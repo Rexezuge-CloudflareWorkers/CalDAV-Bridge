@@ -7,6 +7,8 @@ import { CalDavCredentialDAO, CalendarObjectMappingDAO } from '@caldav-bridge/ba
 import {
   BadRequestError,
   MethodNotAllowedError,
+  NotFoundError,
+  NotImplementedError,
   PreconditionFailedError,
   RequestEntityTooLargeError,
   ServiceError,
@@ -21,7 +23,7 @@ import { OAuth2AuthorizationService } from '@caldav-bridge/backend-services/oaut
 import { UserService } from '@caldav-bridge/backend-services/user';
 import type { UserIdentity } from '@caldav-bridge/backend-services/user';
 import { BaseUrlUtil, CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
-import { DAV_REQUEST_BODY_MAX_BYTES, DAV_RESOURCE_MAX_BYTES } from '@caldav-bridge/shared/constants';
+import { DAV_MULTIGET_MAX_HREFS, DAV_REQUEST_BODY_MAX_BYTES, DAV_RESOURCE_MAX_BYTES } from '@caldav-bridge/shared/constants';
 import { validateRequestInput } from '@caldav-bridge/shared/schema';
 import type { CalendarEvent, ConnectedApplication } from '@caldav-bridge/shared/model';
 import { MiddlewareHandlers } from '@/middleware';
@@ -236,12 +238,21 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
       const liveMapping = mapping?.deletedAt ? undefined : mapping;
       if (request.headers.get('If-None-Match')?.trim() === '*' && liveMapping)
         throw new PreconditionFailedError('Calendar object already exists.');
-      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), liveMapping?.etag || undefined))
+      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), liveMapping?.etag || undefined, 'strong'))
         throw new PreconditionFailedError('Calendar object ETag does not match.');
       // `fromICS` throws on anything that is not a single well-formed VEVENT, so
       // a malformed body is rejected before it can reach the provider calendar.
       const event = ICalendarUtil.fromICS(body, liveMapping?.uid || crypto.randomUUID());
-      const saved = await calendarService.upsertEvent(application, accessToken, path.calendarId, event, liveMapping?.providerEventId);
+      // The stored etag rides along so the provider can reject the write if the
+      // object changed in its own UI since this bridge last saw it.
+      const saved = await calendarService.upsertEvent(
+        application,
+        accessToken,
+        path.calendarId,
+        event,
+        liveMapping?.providerEventId,
+        liveMapping?.etag ?? undefined,
+      );
       await mappingDAO.upsert(application.applicationId, path.calendarId, path.objectHref, saved.id || event.uid, saved.uid, saved.etag);
       return new Response(null, {
         status: liveMapping ? 204 : 201,
@@ -251,10 +262,14 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     if (request.method === 'DELETE') {
       await calendarService.requireWritableCalendar(application, accessToken, path.calendarId);
       const mapping = await mappingDAO.getByHref(application.applicationId, path.calendarId, path.objectHref);
-      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), mapping?.etag || undefined))
+      if (!CalDavUtil.etagMatches(request.headers.get('If-Match'), mapping?.etag || undefined, 'strong'))
         throw new PreconditionFailedError('Calendar object ETag does not match.');
-      const providerEventId = mapping?.providerEventId || CalDavUtil.providerEventIdFromObjectHref(path.objectHref);
-      await calendarService.deleteEvent(application, accessToken, path.calendarId, providerEventId);
+      // With no mapping there is no object here to delete, so this is a `404`
+      // per RFC 4918 §9.6.1 rather than a `204`. Deriving a provider id from the
+      // client-supplied href would also issue a delete the bridge has no record
+      // of having created.
+      if (!mapping || mapping.deletedAt) throw new NotFoundError('Calendar object was not found.');
+      await calendarService.deleteEvent(application, accessToken, path.calendarId, mapping.providerEventId);
       await mappingDAO.markDeletedByHref(application.applicationId, path.calendarId, path.objectHref);
       return new Response(null, { status: 204 });
     }
@@ -318,11 +333,18 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
       throw new MethodNotAllowedError('CalDAV reports are only supported on calendar collections.');
     const report = CalDavUtil.parseReport(body);
     if (report.type !== 'calendar-query' && report.type !== 'calendar-multiget' && report.type !== 'sync-collection')
-      throw new BadRequestError('Unsupported CalDAV report.');
+      // RFC 4791 §7.1: an unsupported report is `501`, not `400`. `400` tells the
+      // client its body was malformed, which sends it looking for a syntax error
+      // in a request the server simply does not implement.
+      throw new NotImplementedError('Unsupported CalDAV report.');
 
     const accessToken = await calendarService.getAccessToken(application.applicationId);
 
     if (report.type === 'calendar-query') {
+      // RFC 4791 §7.8: a server that cannot evaluate a filter must not answer
+      // with results that do not match it. Returning the events it can see would
+      // be a confident wrong answer, so the client is told to re-provision.
+      if (report.unsupportedFilter) return CalDavUtil.invalidFilter(report.unsupportedFilter);
       const events = await calendarService.listEvents(application, accessToken, path.calendarId, report.timeRange);
       const isFullSnapshot = !report.timeRange?.start && !report.timeRange?.end;
       // A time-ranged query returns a subset, so treating what is absent from
@@ -343,7 +365,13 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     }
 
     if (report.type === 'sync-collection') {
-      const syncVersion = CalDavUtil.syncVersionFromToken(report.syncToken);
+      // The token must belong to this collection. Accepting a foreign one let a
+      // client (or anyone who read a token from a log) jump the cursor and skip
+      // changes; accepting a corrupt one returned the whole collection with no
+      // signal that the client must start over.
+      const token = CalDavUtil.parseSyncToken(report.syncToken, application.applicationId, path.calendarId);
+      if ('invalid' in token) return CalDavUtil.invalidSyncToken();
+      const syncVersion = token.version;
       const events = await calendarService.listEvents(application, accessToken, path.calendarId);
       const synced = await calendarService.syncProviderSnapshot(mappingDAO, application.applicationId, path.calendarId, events);
       // Capture the ceiling, then report exactly the window that was captured.
@@ -366,7 +394,10 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     }
 
     const results: Array<{ href: string; event?: CalendarEvent | undefined; status?: number | undefined }> = [];
-    for (const href of report.hrefs) {
+    // Each href costs a provider round-trip, so the list is bounded rather than
+    // allowing one request to drive unbounded serial calls to the provider.
+    const hrefs = report.hrefs.slice(0, DAV_MULTIGET_MAX_HREFS);
+    for (const href of hrefs) {
       const objectHref = CalDavUtil.objectHrefFromDavHref(href, application.applicationId, path.calendarId);
       if (!objectHref) {
         results.push({ href, status: 404 });

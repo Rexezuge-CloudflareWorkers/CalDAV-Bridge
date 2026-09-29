@@ -5,12 +5,15 @@
   "scripts": {
     "postinstall": "node scripts/ensure-spa-shell-stub.mjs && pnpm run typegen",
     "build": "pnpm -r build",
-    "checks": "pnpm -r typecheck && pnpm run typecheck:test && pnpm run lint && pnpm run test",
+    "check:god-files": "node scripts/check-god-files.mjs",
+    "checks": "pnpm -r typecheck && pnpm run typecheck:test && pnpm run lint && pnpm run test && pnpm run check:god-files",
+    "checks:all": "pnpm run checks && pnpm run test:integration",
     "prettier": "prettier --write .",
     "typecheck": "pnpm -r typecheck",
     "typecheck:test": "tsc -p test/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config test/integration/vitest.config.mts",
     "lint": "eslint --ext .ts,.tsx --fix .",
     "typegen": "wrangler types --config ./apps/api/wrangler.template.jsonc --env-interface CloudflareEnv"
   },

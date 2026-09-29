@@ -8,35 +8,29 @@ on:
 jobs:
   sync:
     if: ${{ github.event.repository.fork }}
-    name: Sync Fork with Upstream
+    name: Sync latest commits from upstream
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v6
 
-      - name: Sync with Upstream
+      - name: Sync upstream changes
+        id: sync
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
         with:
-          upstream_repository: Rexezuge-CloudflareWorkers/CalDAV-Bridge
-          upstream_branch: main
-          target_branch: main
-          git_remote_name: upstream
+          upstream_sync_repo: Rexezuge-CloudflareWorkers/CalDAV-Bridge
+          upstream_sync_branch: main
+          target_sync_branch: main
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+          test_mode: false
 
-      - name: Dispatch Upstream Sync Event
-        if: ${{ steps.sync.outputs.sync_changes == 'true' }}
-        uses: actions/github-script@v7
+      - name: Trigger CI for synced commits
+        if: steps.sync.outputs.has_new_commits == 'true'
+        uses: ./.github/actions/retry-step
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.repos.createDispatchEvent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              event_type: 'Upstream Sync',
-              client_payload: {
-                branch: 'main',
-                sha: context.sha,
-              },
-            });
+          command: gh api repos/${{ github.repository }}/dispatches --method POST -f event_type='Upstream Sync'
+          max_attempts: '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

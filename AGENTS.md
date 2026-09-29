@@ -15,6 +15,7 @@ source ~/.customrc
 volta run pnpm install
 volta run pnpm run typecheck
 volta run pnpm run test
+volta run pnpm run test:integration
 volta run pnpm run build
 volta run pnpm run typegen
 ```
@@ -43,7 +44,13 @@ volta run pnpm run typegen
 - `provider-clients/` — `calendar/` (`CalendarProviderUtil` facade dispatching on provider id + `GoogleCalendarProviderUtil`/`OutlookCalendarProviderUtil` + shared HTTP/retry in `BaseCalendarHttp`), `oauth2/` (`OAuth2ProviderUtil`). New provider behavior → per-provider util behind the facade, not branch on provider id in callers.
 - `backend-services/` — business logic by domain: `application/` (`ApplicationService`), `auth/` (`EmailValidationUtil`), `calendar/` (`CalendarService`, `CalDavUtil`, `ICalendarUtil`), `credential/` (`CredentialService`), `oauth2/` (`OAuth2AuthorizationService`, `OAuth2AccessTokenService`, `OAuth2StateUtil`), `user/` (`UserService`, `UserIdentityService`).
 
-**Other**: `migrations/` (latest: `0004_decouple_user_identity.sql`), `functions/[[path]].ts` (Pages → API Worker proxy), `test/` (Vitest suites: `dao/`, `errors/`, `helpers/`, `middleware/`, `ops/`, `schema/`, `services/`, `tasks/`, `utils/`, `workers/`).
+**Other**: `migrations/` (latest: `0004_decouple_user_identity.sql`), `functions/[[path]].ts` (Pages → API Worker proxy), `test/` (Vitest suites: `dao/`, `errors/`, `helpers/`, `middleware/`, `ops/`, `schema/`, `security/`, `services/`, `tasks/`, `utils/`, `web/`, `workers/`), `test/integration/` (its own config: worker + real DAOs against `node:sqlite` with the migrations applied). Aliases, coverage rules and thresholds live in `vitest.shared.mts`, imported by `vitest.config.mts` and `test/integration/vitest.config.mts`.
+
+## CI
+
+`.github/` — `actions/setup-env` (pnpm + Node 24 + cached install) and `actions/retry-step` (re-runs a bash command on failure; every wrangler and `gh` call goes through it, since those are the flaky ones). `workflows/`: `continuous-integration.yml` runs `checks` / `unit-tests` / `integration-tests` / `build` in parallel on `main` and PRs, then auto-merges Dependabot PRs and dispatches deployment after an upstream sync; `continuous-deployment.yml` deploys the Worker and Pages only once CI succeeded on `main`; `backup-main.yml` mirrors `main` to Azure DevOps and GitLab, each gated on its secrets being configured; `scheduled-version-update.yml` stamps `.github/.version`; `upstream-sync.yml` merges upstream `main` into a fork.
+
+`scripts/check-god-files.mjs` reports source files over 300/400 lines. It is **advisory** and always exits 0 -- four files are still over the hard limit, so a gate would fail every push until they are split.
 
 ## User Identity
 

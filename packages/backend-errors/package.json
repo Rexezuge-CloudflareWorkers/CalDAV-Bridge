@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "hono": "^4.13.10"
+    "hono": "^4.13.13"
   },
   "devDependencies": {
     "@types/node": "26.6.x",

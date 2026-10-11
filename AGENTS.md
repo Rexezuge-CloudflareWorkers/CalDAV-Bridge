@@ -63,13 +63,19 @@ Kit APIs this repo has adapted to:
 - **AES-GCM** is `encryptSecret(plaintext, key)` / `decryptSecret({ ciphertext, iv }, key)` with the kit's envelope, and the key must be **base64 of exactly 32 bytes** (`AES_ENCRYPTION_KEY`), enforced fail-closed.
 - `PayloadTooLargeError` is the 413 class name.
 
-**Local dev wiring.** The kit deps in this repo's `package.json` files are `link:` targets at the local kit checkout. CI stages the kit itself: `setup-env` checks the kit out at `../sdk`, builds it, and re-points every `@rexezuge/*` dep at that checkout with the kit's `relink-consumer.mjs` (the same script the kit's consumer matrix uses). Once the kit publishes a version containing the sql-first BaseDAO, swap the `link:` specifiers for that version and drop the CI staging back to a plain install.
+**Dependency wiring.** The kit deps are ordinary published versions (`^1.0.1`), so CI is a plain `pnpm install` — no kit staging. Two things know about kit *HEAD*: the kit's own `consumer-matrix` job re-points this repo's deps at kit HEAD with its `relink-consumer.mjs` and runs these same gates, and a local developer can do the same deliberately:
+
+```bash
+node <kit>/scripts/relink-consumer.mjs --kit <kit> --consumer .   # then pnpm install
+```
+
+**Vitest resolves the kit differently.** The kit ships ESM `dist/` with bundler-style extensionless relative imports (its own tsconfig is `moduleResolution: Bundler`), which Node's ESM resolver refuses; Vitest 4 would externalize those copies and import them with Node, failing on `./BaseDAO` inside `@rexezuge/d1`'s `dist/index.js`. `vitest.shared.mts` therefore lists the kit in `resolve.noExternal`, so the kit runs through Vite's pipeline — the same resolver that bundles the worker and the SPA — and a test loads the very dist the worker ships.
 
 Identity is deliberately **not** adopted from the kit — see **User Identity** below; the kit's canonical `users` table differs from this repo's.
 
 ## CI
 
-`.github/` — `actions/setup-env` (pnpm + Node 24 + cached install, then stages the kit: checks out `Rexezuge-CloudflareWorkers/SDK` at `../sdk`, builds it, and re-points the `@rexezuge/*` deps at it via the kit's `relink-consumer.mjs`) and `actions/retry-step` (re-runs a bash command on failure; every wrangler and `gh` call goes through it, since those are the flaky ones). `workflows/`: `continuous-integration.yml` runs `checks` / `unit-tests` / `integration-tests` / `build` in parallel on `main` and PRs, then auto-merges Dependabot PRs and dispatches deployment after an upstream sync; `continuous-deployment.yml` deploys the Worker and Pages only once CI succeeded on `main`; `backup-main.yml` mirrors `main` to Azure DevOps and GitLab, each gated on its secrets being configured; `scheduled-version-update.yml` stamps `.github/.version`; `upstream-sync.yml` merges upstream `main` into a fork.
+`.github/` — `actions/setup-env` (pnpm + Node 24 + cached install) and `actions/retry-step` (re-runs a bash command on failure; every wrangler and `gh` call goes through it, since those are the flaky ones). `workflows/`: `continuous-integration.yml` runs `checks` / `unit-tests` / `integration-tests` / `build` in parallel on `main` and PRs, then auto-merges Dependabot PRs and dispatches deployment after an upstream sync; `continuous-deployment.yml` deploys the Worker and Pages only once CI succeeded on `main`; `backup-main.yml` mirrors `main` to Azure DevOps and GitLab, each gated on its secrets being configured; `scheduled-version-update.yml` stamps `.github/.version`; `upstream-sync.yml` merges upstream `main` into a fork.
 
 `scripts/check-god-files.mjs` reports source files over 300/400 lines. It is **advisory** and always exits 0 -- four files are still over the hard limit, so a gate would fail every push until they are split.
 

@@ -12,10 +12,10 @@
     "@caldav-bridge/backend-services": "workspace:*",
     "@caldav-bridge/background": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/d1": "link:/home/engineer/workspace/Software-Development-Kit/packages/d1",
-    "@rexezuge/errors": "link:/home/engineer/workspace/Software-Development-Kit/packages/errors",
-    "@rexezuge/runtime": "link:/home/engineer/workspace/Software-Development-Kit/packages/runtime",
-    "@rexezuge/shared": "link:/home/engineer/workspace/Software-Development-Kit/packages/shared",
+    "@rexezuge/d1": "^1.0.1",
+    "@rexezuge/errors": "^1.0.1",
+    "@rexezuge/runtime": "^1.0.1",
+    "@rexezuge/shared": "^1.0.1",
     "hono": "^4.13.13"
   },
   "devDependencies": {

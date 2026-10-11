@@ -20,8 +20,8 @@
   },
   "dependencies": {
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/errors": "link:/home/engineer/workspace/Software-Development-Kit/packages/errors",
-    "@rexezuge/runtime": "link:/home/engineer/workspace/Software-Development-Kit/packages/runtime"
+    "@rexezuge/errors": "^1.0.1",
+    "@rexezuge/runtime": "^1.0.1"
   },
   "devDependencies": {
     "@types/node": "26.6.x",

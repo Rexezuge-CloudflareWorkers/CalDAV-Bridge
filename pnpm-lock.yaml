@@ -9,17 +9,17 @@ importers:
   .:
     devDependencies:
       '@rexezuge/d1':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
-        version: link:../../Software-Development-Kit/packages/d1
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/errors':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
-        version: link:../../Software-Development-Kit/packages/errors
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/runtime':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/runtime
-        version: link:../../Software-Development-Kit/packages/runtime
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/shared':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
-        version: link:../../Software-Development-Kit/packages/shared
+        specifier: ^1.0.1
+        version: 1.0.1
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2
@@ -108,17 +108,17 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@rexezuge/d1':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
-        version: link:../../../../Software-Development-Kit/packages/d1
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/errors':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
-        version: link:../../../../Software-Development-Kit/packages/errors
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/runtime':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/runtime
-        version: link:../../../../Software-Development-Kit/packages/runtime
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/shared':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
-        version: link:../../../../Software-Development-Kit/packages/shared
+        specifier: ^1.0.1
+        version: 1.0.1
       hono:
         specifier: ^4.13.13
         version: 4.13.13
@@ -145,17 +145,17 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@rexezuge/d1':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
-        version: link:../../../../Software-Development-Kit/packages/d1
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/errors':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
-        version: link:../../../../Software-Development-Kit/packages/errors
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/runtime':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/runtime
-        version: link:../../../../Software-Development-Kit/packages/runtime
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/shared':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
-        version: link:../../../../Software-Development-Kit/packages/shared
+        specifier: ^1.0.1
+        version: 1.0.1
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -216,14 +216,14 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/d1':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
-        version: link:../../../../Software-Development-Kit/packages/d1
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/errors':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
-        version: link:../../../../Software-Development-Kit/packages/errors
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/shared':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
-        version: link:../../../../Software-Development-Kit/packages/shared
+        specifier: ^1.0.1
+        version: 1.0.1
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -238,11 +238,11 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/errors':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
-        version: link:../../../../Software-Development-Kit/packages/errors
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/runtime':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/runtime
-        version: link:../../../../Software-Development-Kit/packages/runtime
+        specifier: ^1.0.1
+        version: 1.0.1
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -266,14 +266,14 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/d1':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
-        version: link:../../../../Software-Development-Kit/packages/d1
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/errors':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
-        version: link:../../../../Software-Development-Kit/packages/errors
+        specifier: ^1.0.1
+        version: 1.0.1
       '@rexezuge/shared':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
-        version: link:../../../../Software-Development-Kit/packages/shared
+        specifier: ^1.0.1
+        version: 1.0.1
       jose:
         specifier: ^6.2.12
         version: 6.2.12
@@ -294,8 +294,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/errors':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
-        version: link:../../../../Software-Development-Kit/packages/errors
+        specifier: ^1.0.1
+        version: 1.0.1
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -307,8 +307,8 @@ importers:
   packages/shared:
     dependencies:
       '@rexezuge/shared':
-        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
-        version: link:../../../../Software-Development-Kit/packages/shared
+        specifier: ^1.0.1
+        version: 1.0.1
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -1026,6 +1026,18 @@ packages:
 
   '@poppinss/exception@1.2.3':
     resolution: {integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==}
+
+  '@rexezuge/d1@1.0.1':
+    resolution: {integrity: sha512-eLHAGTe37a8gG/qFd3NqcNAF9ViMxWOKmjP+j455k6iQr4tCckvxVFZfvKqn83QuEJNpf+PPIt69OR9W7E53ZA==}
+
+  '@rexezuge/errors@1.0.1':
+    resolution: {integrity: sha512-haemKaMTHdvOtB30BvSfTiglGx/8SLzc5HPQpD57pLZfdSbVbewwxcp5TmbX9sxjR79mYn9HOted5Bmo40V9gQ==}
+
+  '@rexezuge/runtime@1.0.1':
+    resolution: {integrity: sha512-mTotXMd5zCAuhSwxmb90mITQhjkO9W5bXujr2z3pX6lnQbZN8ZWnG0udZRhH8NobsioP6hTGnWQjVRP9pxrFfg==}
+
+  '@rexezuge/shared@1.0.1':
+    resolution: {integrity: sha512-7uYKcptQvqRF5LUJs8/GAfbXvG3sxPknen9dJwqSwGPBof5bVfbQW/wG10k7MWSzA3qic2KkDnXGxF1HXMF8ZA==}
 
   '@rolldown/binding-android-arm-eabi@1.2.12':
     resolution: {integrity: sha512-dB/a1214qKfHMXCpgqR4OZT+jS4kTyEXbQGJPqzobt5EwH5rX080pxE37alt3RzvR1bf1Yz/yGqRfrYAxuPw0A==}
@@ -2885,6 +2897,17 @@ snapshots:
       supports-color: 10.2.2
 
   '@poppinss/exception@1.2.3': {}
+
+  '@rexezuge/d1@1.0.1':
+    dependencies:
+      '@rexezuge/errors': 1.0.1
+      '@rexezuge/shared': 1.0.1
+
+  '@rexezuge/errors@1.0.1': {}
+
+  '@rexezuge/runtime@1.0.1': {}
+
+  '@rexezuge/shared@1.0.1': {}
 
   '@rolldown/binding-android-arm-eabi@1.2.12':
     optional: true

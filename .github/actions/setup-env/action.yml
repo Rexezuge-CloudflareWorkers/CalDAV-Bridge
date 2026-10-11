@@ -1,5 +1,5 @@
 name: Setup Environment
-description: Install pnpm, set up Node.js with pnpm store cache, stage the Rexezuge kit, and install workspace dependencies
+description: Install pnpm, set up Node.js with pnpm store cache, and install workspace dependencies
 
 runs:
   using: composite
@@ -13,32 +13,8 @@ runs:
         node-version: '24'
         cache: pnpm
 
-    # The framework kernel comes from the kit (@rexezuge/*), not from this
-    # repo. CI stages the kit as a sibling checkout, builds it (the link:
-    # deps resolve to its dist/), and re-points this repo's @rexezuge/* deps
-    # at it — the same script the kit's own consumer matrix uses, so a local
-    # run and a CI run see identical code. Pin `ref` to a release tag once
-    # the kit ships the sql-first BaseDAO as a published version.
-    - name: Checkout Rexezuge Kit
-      uses: actions/checkout@v6
-      with:
-        repository: Rexezuge-CloudflareWorkers/SDK
-        ref: main
-        path: ../sdk
-
-    - name: Build Kit And Re-point Deps
-      shell: bash
-      run: |
-        pnpm --dir ../sdk install --frozen-lockfile
-        pnpm --dir ../sdk run build
-        node ../sdk/scripts/relink-consumer.mjs --kit ../sdk --consumer .
-
-    # Not frozen: the relink above deliberately diverges from the committed
-    # lockfile's link: paths (a local checkout's absolute paths), so pnpm
-    # re-resolves them against the staged kit. Same as the kit's own
-    # consumer-matrix job.
     - name: Install Dependencies
       uses: ./.github/actions/retry-step
       with:
-        command: pnpm install --no-frozen-lockfile
+        command: pnpm install
         max_attempts: '3'

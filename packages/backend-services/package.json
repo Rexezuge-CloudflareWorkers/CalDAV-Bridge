@@ -27,9 +27,9 @@
     "@caldav-bridge/backend-runtime": "workspace:*",
     "@caldav-bridge/provider-clients": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/d1": "link:/home/engineer/workspace/Software-Development-Kit/packages/d1",
-    "@rexezuge/errors": "link:/home/engineer/workspace/Software-Development-Kit/packages/errors",
-    "@rexezuge/shared": "link:/home/engineer/workspace/Software-Development-Kit/packages/shared",
+    "@rexezuge/d1": "^1.0.1",
+    "@rexezuge/errors": "^1.0.1",
+    "@rexezuge/shared": "^1.0.1",
     "jose": "^6.2.12"
   },
   "devDependencies": {

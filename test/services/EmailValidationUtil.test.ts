@@ -34,4 +34,18 @@ describe('EmailValidationUtil', () => {
       EmailValidationUtil.getAuthenticatedUserEmail(request(), { TEAM_DOMAIN: 'https://team.example.test', POLICY_AUD: 'aud' }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
+
+  it('rejects an audience that is only whitespace', async () => {
+    // `POLICY_AUD: '   '` passes the presence check and then fails the trimmed
+    // one. Without the trim, jose receives a whitespace audience and every
+    // real token fails verification with a message that names the token, not
+    // the misconfiguration — the slowest possible way to find a typo.
+    await expect(
+      EmailValidationUtil.getAuthenticatedUserEmail(requestWithToken(), { TEAM_DOMAIN: 'https://team.example.test', POLICY_AUD: '   ' }),
+    ).rejects.toThrow('empty POLICY_AUD');
+  });
 });
+
+function requestWithToken(): Request {
+  return new Request('https://bridge.example.test/user/me', { headers: { 'cf-access-jwt-assertion': 'token' } });
+}

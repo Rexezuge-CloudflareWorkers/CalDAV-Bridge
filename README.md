@@ -13,7 +13,7 @@ Users bring their own OAuth app credentials. The management UI creates connected
 
 - D1 database binding: `DB`
 - KV namespace: `OAUTH2_TOKEN_CACHE`
-- Durable Object namespace: `OAUTH2_TOKEN_REFRESHERS`
+- Durable Object namespace: `CRON_TASKS` (`CronTasksWorker`)
 - Secrets Store secret: `AES_ENCRYPTION_KEY_SECRET`
 
 Copy `apps/api/wrangler.template.jsonc` to `wrangler.jsonc` and fill in the D1 database id, KV namespace id, secret store id, and routes.

@@ -4,9 +4,8 @@ import { BadRequestError } from '@rexezuge/errors';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { OAuth2ProviderUtil } from '@caldav-bridge/provider-clients/oauth2';
 import type { ConnectedApplication } from '@caldav-bridge/shared/model';
-import { TimestampUtil } from '@rexezuge/shared';
+import { generateCodeVerifier, generateState, getCodeChallenge, getStateHash, TimestampUtil } from '@rexezuge/shared';
 import { OAuth2AccessTokenService } from './OAuth2AccessTokenService';
-import { OAuth2StateUtil } from './OAuth2StateUtil';
 
 interface OAuth2AuthorizationEnv {
   DB: D1Queryable;
@@ -24,9 +23,9 @@ class OAuth2AuthorizationService {
   constructor(private readonly env: OAuth2AuthorizationEnv) {}
 
   public async createAuthorization(application: ConnectedApplication, baseUrl: string): Promise<OAuth2AuthorizationResult> {
-    const state = OAuth2StateUtil.generateState();
-    const codeVerifier = OAuth2StateUtil.generateCodeVerifier();
-    const codeChallenge = await OAuth2StateUtil.getCodeChallenge(codeVerifier);
+    const state = generateState();
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await getCodeChallenge(codeVerifier);
     const redirectUri = `${baseUrl}/api/oauth2/callback/${application.applicationId}`;
     const expiresAt = TimestampUtil.addMinutes(
       TimestampUtil.getCurrentUnixTimestampInSeconds(),
@@ -34,7 +33,7 @@ class OAuth2AuthorizationService {
     );
     await new OAuth2AuthorizationSessionDAO(this.env.DB).create(
       application.applicationId,
-      await OAuth2StateUtil.getStateHash(state),
+      await getStateHash(state),
       codeVerifier,
       redirectUri,
       expiresAt,
@@ -61,7 +60,7 @@ class OAuth2AuthorizationService {
     if (providerError) return { redirect: `/user?oauth2=error&message=${encodeURIComponent(providerError)}` };
     if (!code || !state) throw new BadRequestError('OAuth2 callback is missing code or state.');
     const sessionDAO = new OAuth2AuthorizationSessionDAO(this.env.DB);
-    const session = await sessionDAO.getActive(applicationId, await OAuth2StateUtil.getStateHash(state));
+    const session = await sessionDAO.getActive(applicationId, await getStateHash(state));
     if (!session) throw new BadRequestError('OAuth2 authorization session is invalid or expired.');
     await OAuth2AccessTokenService.completeAuthorization(applicationId, session.redirectUri, code, session.codeVerifier, this.env);
     await sessionDAO.consume(session.sessionId);

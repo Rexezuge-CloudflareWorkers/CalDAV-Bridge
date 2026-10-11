@@ -8,8 +8,6 @@
     ".": "./src/index.ts",
     "./application": "./src/application/index.ts",
     "./application/*": "./src/application/*.ts",
-    "./auth": "./src/auth/index.ts",
-    "./auth/*": "./src/auth/*.ts",
     "./calendar": "./src/calendar/index.ts",
     "./calendar/*": "./src/calendar/*.ts",
     "./credential": "./src/credential/index.ts",
@@ -27,10 +25,9 @@
     "@caldav-bridge/backend-runtime": "workspace:*",
     "@caldav-bridge/provider-clients": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/d1": "^1.0.2",
-    "@rexezuge/errors": "^1.0.2",
-    "@rexezuge/shared": "^1.0.2",
-    "jose": "^6.2.12"
+    "@rexezuge/d1": "1.2.0",
+    "@rexezuge/errors": "1.2.0",
+    "@rexezuge/shared": "1.2.0"
   },
   "devDependencies": {
     "@types/node": "26.6.x",

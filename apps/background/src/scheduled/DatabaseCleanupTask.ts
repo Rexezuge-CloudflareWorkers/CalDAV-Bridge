@@ -1,9 +1,9 @@
 import { TimestampUtil } from '@rexezuge/shared';
+import { AbstractScheduledTask } from '@rexezuge/runtime';
+import type { ScheduledTaskEnv, TaskRunSummary } from '@rexezuge/runtime';
 import { CalDavCredentialDAO, CalendarObjectMappingDAO, ConnectedApplicationDAO, OAuth2AuthorizationSessionDAO, UserDAO } from '@caldav-bridge/backend-data/dao';
 import type { D1Queryable } from '@rexezuge/d1';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
-import { IScheduledTask } from './IScheduledTask';
-import type { IEnv } from './IScheduledTask';
 
 interface DatabaseCleanupCounts {
   draftApplications: number;
@@ -18,11 +18,16 @@ interface DatabaseCleanupCounts {
   emptyUsers: number;
 }
 
-class DatabaseCleanupTask extends IScheduledTask<DatabaseCleanupTaskEnv> {
-  protected async handleScheduledTask(_event: ScheduledController, env: DatabaseCleanupTaskEnv, _ctx: ExecutionContext): Promise<void> {
+class DatabaseCleanupTask extends AbstractScheduledTask<DatabaseCleanupTaskEnv> {
+  protected async handleScheduledTask(
+    _event: ScheduledController,
+    env: DatabaseCleanupTaskEnv,
+    _ctx: ExecutionContext,
+  ): Promise<TaskRunSummary> {
     const counts = await this.cleanup(env);
     const totalDeleted = Object.values(counts).reduce((total, count) => total + count, 0);
     console.log('Database cleanup completed.', { totalDeleted });
+    return { itemsProcessed: totalDeleted, itemsFailed: 0 };
   }
 
   public async cleanup(env: DatabaseCleanupTaskEnv): Promise<DatabaseCleanupCounts> {
@@ -88,7 +93,7 @@ class DatabaseCleanupTask extends IScheduledTask<DatabaseCleanupTaskEnv> {
   }
 }
 
-interface DatabaseCleanupTaskEnv extends IEnv {
+interface DatabaseCleanupTaskEnv extends ScheduledTaskEnv {
   DB: D1Queryable;
   AES_ENCRYPTION_KEY_SECRET: SecretsStoreSecret;
   DB_CLEANUP_BATCH_SIZE?: string | undefined;

@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
+import { ModalShell } from '@rexezuge/web';
 import { Button } from '../ui/Button';
-import { ModalShell } from './ModalShell';
 
 export function ConfirmDeleteModal({
   displayName,

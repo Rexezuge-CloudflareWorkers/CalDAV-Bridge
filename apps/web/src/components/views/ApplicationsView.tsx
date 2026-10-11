@@ -1,6 +1,6 @@
+import { EmptyState } from '@rexezuge/web';
 import { Button } from '../ui/Button';
 import { Card, CardHeader, CardTitle } from '../ui/Card';
-import { EmptyState } from '../shared/EmptyState';
 import { ApplicationCard } from '../applications/ApplicationCard';
 import type { ConnectedApplication, CurrentUser } from '../../types';
 
@@ -50,9 +50,15 @@ export function ApplicationsView({
           </div>
         ) : (
           <EmptyState
-            title="No Applications Yet"
-            description="Create An Application To Connect Google Calendar Or Outlook Calendar."
-            action={<Button onClick={onConnect}>Connect Calendar</Button>}
+            message={
+              <div className="grid justify-items-start gap-2">
+                <h3 className="text-base font-semibold text-[var(--color-text-primary)]">No Applications Yet</h3>
+                <p className="text-sm text-[var(--color-text-secondary)]">
+                  Create An Application To Connect Google Calendar Or Outlook Calendar.
+                </p>
+                <Button onClick={onConnect}>Connect Calendar</Button>
+              </div>
+            }
           />
         )}
       </Card>

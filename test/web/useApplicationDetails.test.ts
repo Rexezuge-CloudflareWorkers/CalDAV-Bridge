@@ -1,8 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useNotice } from '@rexezuge/web';
 import { useApplicationDetails } from '~/hooks/useApplicationDetails';
 import { useCurrentUser } from '~/hooks/useCurrentUser';
-import { useNotice } from '~/hooks/useNotice';
+import { getInitialNotice } from '~/SpaApp';
 import type { ConnectedApplication } from '~/types';
 
 const service = vi.hoisted(() => ({
@@ -239,7 +240,7 @@ describe('useNotice', () => {
 
       act(() => result.current.showNotice('success', 'Saved.'));
 
-      expect(result.current.notice).toEqual({ type: 'success', text: 'Saved.' });
+      expect(result.current.notice).toEqual({ kind: 'success', message: 'Saved.' });
       act(() => {
         vi.advanceTimersByTime(10_000);
       });
@@ -262,41 +263,42 @@ describe('useNotice', () => {
 
       // The first notice's timer would still be pending, so without the reset it
       // would clear the second notice early.
-      expect(result.current.notice).toEqual({ type: 'error', text: 'Second.' });
+      expect(result.current.notice).toEqual({ kind: 'error', message: 'Second.' });
       act(() => {
         vi.advanceTimersByTime(1_000);
       });
-      expect(result.current.notice).toEqual({ type: 'error', text: 'Second.' });
+      expect(result.current.notice).toEqual({ kind: 'error', message: 'Second.' });
     } finally {
       vi.useRealTimers();
     }
   });
 
+  it('dismisses the notice on demand', () => {
+    const { result } = renderHook(() => useNotice());
+
+    act(() => result.current.showNotice('success', 'Saved.'));
+    act(() => result.current.dismissNotice());
+
+    expect(result.current.notice).toBeNull();
+  });
+});
+
+describe('getInitialNotice', () => {
   /**
    * The OAuth2 callback returns to the SPA with its result in the query string.
    * Reporting it once and then leaving it in the URL would show the same banner
    * again on every reload of that URL.
    */
   it('reports a successful OAuth2 return from the query string', () => {
-    const original = globalThis.location.search;
-    globalThis.history.replaceState(null, '', '/user/apps?oauth2=connected');
-    try {
-      const { result } = renderHook(() => useNotice());
-
-      expect(result.current.notice?.type).toBe('success');
-    } finally {
-      globalThis.history.replaceState(null, '', `/user/apps${original}`);
-    }
+    expect(getInitialNotice('?oauth2=connected')).toEqual({ kind: 'success', message: 'OAuth2 Connection Completed.' });
   });
 
   it('reports a failed OAuth2 return with the provider message', () => {
-    globalThis.history.replaceState(null, '', '/user/apps?oauth2=error&message=access_denied');
-    try {
-      const { result } = renderHook(() => useNotice());
+    expect(getInitialNotice('?oauth2=error&message=access_denied')).toEqual({ kind: 'error', message: 'access_denied' });
+  });
 
-      expect(result.current.notice).toEqual({ type: 'error', text: 'access_denied' });
-    } finally {
-      globalThis.history.replaceState(null, '', '/user/apps');
-    }
+  it('starts with no notice on an ordinary load', () => {
+    expect(getInitialNotice('')).toBeNull();
+    expect(getInitialNotice('?oauth2=unknown')).toBeNull();
   });
 });

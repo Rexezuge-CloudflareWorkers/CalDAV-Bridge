@@ -1,6 +1,6 @@
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
-import { EmptyState } from '../shared/EmptyState';
+import { EmptyState } from '@rexezuge/web';
 import { ConnectionDetails } from '../applications/ConnectionDetails';
 import { CredentialsSection } from '../applications/CredentialsSection';
 import { CalendarsSection } from '../applications/CalendarsSection';
@@ -45,9 +45,13 @@ export function ApplicationDetailView({
   if (!application) {
     return (
       <EmptyState
-        title="Application Not Found"
-        description="The Selected Application Could Not Be Found For Your Account."
-        action={<Button onClick={onBack}>Back To Applications</Button>}
+        message={
+          <div className="grid justify-items-start gap-2">
+            <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Application Not Found</h3>
+            <p className="text-sm text-[var(--color-text-secondary)]">The Selected Application Could Not Be Found For Your Account.</p>
+            <Button onClick={onBack}>Back To Applications</Button>
+          </div>
+        }
       />
     );
   }

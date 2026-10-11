@@ -1,17 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Unauthorized from './components/Unauthorized';
+import { NoticeBar, Unauthorized, useNotice } from '@rexezuge/web';
+import type { Notice } from '@rexezuge/web';
 import { Header } from './components/layout/Header';
-import { NoticeBar } from './components/layout/NoticeBar';
 import { ApplicationsView } from './components/views/ApplicationsView';
 import { ConnectView } from './components/views/ConnectView';
 import { ApplicationDetailView } from './components/views/ApplicationDetailView';
-import { useNotice } from './hooks/useNotice';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { useRouting } from './hooks/useRouting';
 import { useApplications } from './hooks/useApplications';
 import { useApplicationDetails } from './hooks/useApplicationDetails';
 import { authorizeOAuth2 } from './services/oauthService';
 import { parseRoute, routePath } from './types';
+
+/**
+ * Seed the first notice from the OAuth2 redirect result, if any.
+ *
+ * The `?oauth2=` parameter names are product-specific, so the kit's `useNotice`
+ * leaves seeding to the consumer through its `initial` option rather than
+ * reading the query string itself.
+ */
+export function getInitialNotice(search: string): Notice | null {
+  const params = new URLSearchParams(search);
+  if (params.get('oauth2') === 'connected') return { kind: 'success', message: 'OAuth2 Connection Completed.' };
+  if (params.get('oauth2') === 'error') return { kind: 'error', message: params.get('message') || 'OAuth2 Connection Failed.' };
+  return null;
+}
 
 export default function SpaApp() {
   const { route, navigate, replaceRoute } = useRouting();
@@ -20,7 +33,7 @@ export default function SpaApp() {
   const [generating, setGenerating] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
 
-  const { notice, showNotice } = useNotice();
+  const { notice, showNotice } = useNotice({ initial: getInitialNotice(globalThis.location.search) });
   const { user, authorized } = useCurrentUser();
   const applications = useApplications({ showNotice });
 
@@ -129,13 +142,23 @@ export default function SpaApp() {
     );
   }
 
-  if (!authorized || !user) return <Unauthorized />;
+  if (!authorized || !user) {
+    return (
+      <div className="min-h-screen bg-[var(--color-surface-base)] text-[var(--color-text-primary)] flex items-center justify-center">
+        <Unauthorized
+          title="Access Required"
+          message="You Must Authenticate To Access This Application."
+          actionLabel="Authenticate With Cloudflare Zero Trust"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--color-surface-base)] text-[var(--color-text-primary)]">
       <Header route={route} onNavigate={navigate} userEmail={user.email} />
 
-      {notice && <NoticeBar notice={notice} />}
+      {notice && <NoticeBar notice={notice} statusLabels={{ success: 'Success', error: 'Error' }} />}
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         {route.page === 'applications' && (

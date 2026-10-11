@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { InternalServerError } from '@caldav-bridge/backend-errors';
+import { InternalServerError } from '@rexezuge/errors';
 
 const { applicationSpies } = vi.hoisted(() => ({
   applicationSpies: {

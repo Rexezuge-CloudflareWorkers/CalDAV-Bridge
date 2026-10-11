@@ -8,7 +8,7 @@
  * into the response as *element names*, where escaping cannot help.
  */
 
-import { BadRequestError } from '@caldav-bridge/backend-errors';
+import { BadRequestError } from '@rexezuge/errors';
 import { allElementTexts, attributeValue, directChildNames, firstElementName, parseDavXml } from './DavXmlScanner';
 import { unescapeXml } from './DavXmlUtil';
 

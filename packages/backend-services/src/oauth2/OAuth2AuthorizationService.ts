@@ -1,10 +1,10 @@
 import { OAuth2AuthorizationSessionDAO } from '@caldav-bridge/backend-data/dao';
-import type { D1Queryable } from '@caldav-bridge/backend-data/utils';
-import { BadRequestError } from '@caldav-bridge/backend-errors';
+import type { D1Queryable } from '@rexezuge/d1';
+import { BadRequestError } from '@rexezuge/errors';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { OAuth2ProviderUtil } from '@caldav-bridge/provider-clients/oauth2';
 import type { ConnectedApplication } from '@caldav-bridge/shared/model';
-import { TimestampUtil } from '@caldav-bridge/shared/utils';
+import { TimestampUtil } from '@rexezuge/shared';
 import { OAuth2AccessTokenService } from './OAuth2AccessTokenService';
 import { OAuth2StateUtil } from './OAuth2StateUtil';
 

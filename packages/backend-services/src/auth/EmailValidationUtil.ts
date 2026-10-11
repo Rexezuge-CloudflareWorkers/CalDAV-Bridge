@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { UnauthorizedError } from '@caldav-bridge/backend-errors';
+import { UnauthorizedError } from '@rexezuge/errors';
 
 interface EmailValidationEnv {
   DEV_AUTH_EMAIL?: string;

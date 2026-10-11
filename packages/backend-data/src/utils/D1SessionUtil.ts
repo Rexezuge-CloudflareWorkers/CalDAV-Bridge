@@ -1,4 +1,7 @@
-type D1Queryable = Pick<D1Database, 'prepare' | 'batch'>;
+// The structural D1 surface the DAOs program against — re-exported from the
+// kit so a DAO statement built here and one built by a kit package are the
+// same type, not two declarations that happen to look alike.
+import type { D1Queryable } from '@rexezuge/d1';
 
 type D1SessionEnv<TEnv extends { DB: D1Database }> = Omit<TEnv, 'DB'> & {
   DB: D1DatabaseSession;

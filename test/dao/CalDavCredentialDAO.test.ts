@@ -1,7 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CalDavCredentialDAO } from '@caldav-bridge/backend-data/dao';
-import { CalDavCredentialUtil, TimestampUtil } from '@caldav-bridge/shared/utils';
+import { TimestampUtil } from '@rexezuge/shared';
+import { CalDavCredentialUtil } from '@caldav-bridge/shared';
 import { asD1Queryable } from '../helpers/d1';
 import { applyMigrations } from '../helpers/migrations';
 

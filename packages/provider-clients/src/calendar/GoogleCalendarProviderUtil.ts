@@ -1,4 +1,4 @@
-import { InternalServerError } from '@caldav-bridge/backend-errors';
+import { InternalServerError } from '@rexezuge/errors';
 import type { CalendarEvent, ProviderCalendar } from '@caldav-bridge/shared/model';
 import { fetchProviderJson } from './BaseCalendarHttp';
 import { CalendarProviderUtil } from './CalendarProviderUtil';

@@ -8,4 +8,5 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - miniflare@4.20260520.0
   - terser@5.48.0
+  - '@rexezuge/*'
   - wrangler@4.93.1

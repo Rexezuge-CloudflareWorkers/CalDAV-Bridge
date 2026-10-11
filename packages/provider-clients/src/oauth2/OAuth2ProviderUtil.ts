@@ -1,6 +1,6 @@
 import { PROVIDER_GOOGLE_CALENDAR, PROVIDER_MICROSOFT_OUTLOOK_CALENDAR } from '@caldav-bridge/shared/constants';
 import type { OAuth2Credentials, ProviderId } from '@caldav-bridge/shared';
-import { BadRequestError, InternalServerError } from '@caldav-bridge/backend-errors';
+import { BadRequestError, InternalServerError } from '@rexezuge/errors';
 
 interface OAuth2AuthorizationInput {
   providerId: ProviderId | string;

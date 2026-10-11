@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NotFoundError } from '@caldav-bridge/backend-errors';
+import { NotFoundError } from '@rexezuge/errors';
 import type { CalendarEvent } from '@caldav-bridge/shared/model';
 import { CalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar';
 import { GoogleCalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar/GoogleCalendarProviderUtil';

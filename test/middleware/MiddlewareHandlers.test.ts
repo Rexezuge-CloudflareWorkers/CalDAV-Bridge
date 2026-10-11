@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { InternalServerError, UnauthorizedError } from '@caldav-bridge/backend-errors';
+import { InternalServerError, UnauthorizedError } from '@rexezuge/errors';
 
 const { getAuthenticatedUserEmail, upsertUser } = vi.hoisted(() => ({
   getAuthenticatedUserEmail: vi.fn(),

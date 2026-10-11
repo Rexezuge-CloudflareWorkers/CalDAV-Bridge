@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError, DatabaseError, ServiceUnavailableError } from '@caldav-bridge/backend-errors';
+import { BadRequestError, DatabaseError } from '@rexezuge/errors';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { errorResponse, jsonResponse, textResponse } from '@caldav-bridge/backend-runtime/http';
-import { decryptData, encryptData } from '@caldav-bridge/backend-data/crypto';
+import { RetryAfterError } from '@caldav-bridge/shared';
+import { decryptSecret, encryptSecret } from '@rexezuge/d1';
 import { OAuth2StateUtil } from '@caldav-bridge/backend-services/oauth2';
-import { BaseUrlUtil, CryptoUtil, TimestampUtil, UUIDUtil } from '@caldav-bridge/shared/utils';
+import { CryptoUtil, TimestampUtil, UUIDUtil } from '@rexezuge/shared';
+import { BaseUrlUtil } from '@caldav-bridge/shared';
 
 describe('backend core utilities', () => {
   afterEach(() => {
@@ -55,9 +57,7 @@ describe('backend core utilities', () => {
     expect(clientError.status).toBe(400);
     await expect(clientError.json()).resolves.toEqual({ error: 'Slow down' });
 
-    const throttled = new ServiceUnavailableError('Slow down');
-    throttled.headers = { 'Retry-After': '5' };
-    const throttledResponse = errorResponse(throttled);
+    const throttledResponse = errorResponse(new RetryAfterError('Slow down', 5));
     expect(throttledResponse.status).toBe(503);
     expect(throttledResponse.headers.get('Retry-After')).toBe('5');
     // 5xx bodies are fixed regardless of the error's own message: a throttling
@@ -95,7 +95,8 @@ describe('backend core utilities', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-21T12:34:56Z'));
 
-    expect(CryptoUtil.base64UrlEncode(new Uint8Array([251, 255, 238]))).toBe('-__u');
+    expect(CryptoUtil.base64UrlEncode('bytes-value')).toBe('Ynl0ZXMtdmFsdWU');
+    expect(CryptoUtil.toBase64Url(new Uint8Array([251, 255, 238]))).toBe('-__u');
     expect(CryptoUtil.randomBase64Url(16)).toMatch(/^[A-Za-z0-9_-]{22}$/);
     await expect(CryptoUtil.sha256Hex('abc')).resolves.toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
     expect(TimestampUtil.getCurrentUnixTimestampInSeconds()).toBe(1779366896);
@@ -105,11 +106,13 @@ describe('backend core utilities', () => {
   });
 
   it('encrypts and decrypts API secrets with AES-GCM', async () => {
-    const encrypted = await encryptData('client-secret', 'master-key');
+    // The kit's aes-gcm contract: base64 of exactly 32 bytes.
+  const MASTER_KEY = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=';
+  const encrypted = await encryptSecret('client-secret', MASTER_KEY);
 
-    expect(encrypted.encrypted).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
+    expect(encrypted.ciphertext).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
     expect(encrypted.iv).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
-    await expect(decryptData(encrypted.encrypted, encrypted.iv, 'master-key')).resolves.toBe('client-secret');
-    await expect(decryptData(encrypted.encrypted, encrypted.iv, 'wrong-key')).rejects.toThrow();
+    await expect(decryptSecret({ ciphertext: encrypted.ciphertext, iv: encrypted.iv }, MASTER_KEY)).resolves.toBe('client-secret');
+    await expect(decryptSecret({ ciphertext: encrypted.ciphertext, iv: encrypted.iv }, 'AAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=')).rejects.toThrow();
   });
 });

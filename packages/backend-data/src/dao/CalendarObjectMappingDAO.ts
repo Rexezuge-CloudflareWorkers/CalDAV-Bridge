@@ -1,8 +1,9 @@
-import { InternalServerError } from '@caldav-bridge/backend-errors';
+import { InternalServerError } from '@rexezuge/errors';
 import type { CalendarObjectMappingInternal } from '@caldav-bridge/shared/model';
-import { TimestampUtil, UUIDUtil } from '@caldav-bridge/shared/utils';
+import { TimestampUtil, UUIDUtil } from '@rexezuge/shared';
 import type { D1Queryable } from '../utils';
-import { BaseDAO } from './BaseDAO';
+import type { D1PreparedStatement } from '@rexezuge/d1';
+import { BaseDAO } from '@rexezuge/d1';
 
 const MAPPING_COLUMNS =
   'object_id, application_id, calendar_id, href, provider_event_id, uid, etag, deleted_at, sync_version, created_at, updated_at';

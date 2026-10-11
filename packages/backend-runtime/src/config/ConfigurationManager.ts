@@ -13,7 +13,7 @@ import {
   DEFAULT_OAUTH2_ACCESS_TOKEN_MIN_VALID_SECONDS,
   DEFAULT_OAUTH2_STATE_EXPIRY_MINUTES,
 } from '@caldav-bridge/shared/constants';
-import { EnvParser } from './EnvParser';
+import { EnvParser } from '@rexezuge/runtime';
 
 class ConfigurationManager {
   // ─── Namespace groups ────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
-import { ServiceError } from '@caldav-bridge/backend-errors';
+import { ServiceError } from '@rexezuge/errors';
+import { RetryAfterError } from '@caldav-bridge/shared';
 
 function jsonResponse(value: unknown, status = 200, headers: HeadersInit = {}): Response {
   const responseHeaders = new Headers(headers);
@@ -22,15 +23,27 @@ function textResponse(value: string, status = 200, headers: HeadersInit = {}): R
  */
 const INTERNAL_ERROR_MESSAGE = 'The server encountered an internal error.';
 
-function errorResponse(error: unknown): Response {
-  const status = error instanceof ServiceError ? error.getErrorCode() : 500;
-  const headers = error instanceof ServiceError ? error.headers : undefined;
-  if (status >= 500) {
+/**
+ * Map any thrown value onto the `{ error }` JSON envelope.
+ *
+ * Adapted to the kit's taxonomy (`@rexezuge/errors`): classification is
+ * `ServiceError.from`, the status is `mapped.status`, and the message is
+ * `mapped.message` exactly when `mapped.expose` — the kit's decision field —
+ * says it is safe. Transport headers (a `WWW-Authenticate` challenge, for
+ * example) are the caller's to pass: the kit's taxonomy deliberately carries
+ * no response decoration, so a caller needing one passes it in and nothing
+ * here has to know which routes challenge.
+ */
+function errorResponse(error: unknown, headers?: HeadersInit): Response {
+  const mapped = ServiceError.from(error);
+  // The one transport decoration this repo's taxonomy subclass carries.
+  const transport = headers ?? (error instanceof RetryAfterError ? error.headers : undefined);
+  if (mapped.status >= 500) {
     console.error(error);
-    return jsonResponse({ error: INTERNAL_ERROR_MESSAGE }, status, headers);
+    return jsonResponse({ error: INTERNAL_ERROR_MESSAGE }, mapped.status, transport);
   }
-  const message = error instanceof Error ? error.message : INTERNAL_ERROR_MESSAGE;
-  return jsonResponse({ error: message }, status, headers);
+  const message = mapped.expose ? mapped.message : (mapped.toErrorResponse().body.Exception?.Message ?? INTERNAL_ERROR_MESSAGE);
+  return jsonResponse({ error: message }, mapped.status, transport);
 }
 
 export { errorResponse, jsonResponse, textResponse };

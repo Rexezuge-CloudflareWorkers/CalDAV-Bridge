@@ -1,4 +1,4 @@
-import { NotFoundError } from '@caldav-bridge/backend-errors';
+import { NotFoundError } from '@rexezuge/errors';
 import { PROVIDER_GOOGLE_CALENDAR } from '@caldav-bridge/shared/constants';
 import type { ProviderId } from '@caldav-bridge/shared/constants';
 import type { CalendarEvent, ProviderCalendar } from '@caldav-bridge/shared/model';

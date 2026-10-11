@@ -7,12 +7,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@caldav-bridge/background": "workspace:*",
     "@caldav-bridge/backend-data": "workspace:*",
-    "@caldav-bridge/backend-errors": "workspace:*",
     "@caldav-bridge/backend-runtime": "workspace:*",
     "@caldav-bridge/backend-services": "workspace:*",
+    "@caldav-bridge/background": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
+    "@rexezuge/d1": "^1.0.2",
+    "@rexezuge/errors": "^1.0.2",
+    "@rexezuge/runtime": "^1.0.2",
+    "@rexezuge/shared": "^1.0.2",
     "hono": "^4.13.13"
   },
   "devDependencies": {

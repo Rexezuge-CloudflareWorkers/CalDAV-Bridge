@@ -1,4 +1,4 @@
-import { BadRequestError } from '@caldav-bridge/backend-errors';
+import { BadRequestError } from '@rexezuge/errors';
 import type { CalendarEvent } from '@caldav-bridge/shared/model';
 
 class ICalendarUtil {

@@ -1,4 +1,4 @@
-import { CryptoUtil } from '@caldav-bridge/shared/utils';
+import { CryptoUtil } from '@rexezuge/shared';
 
 class OAuth2StateUtil {
   public static generateState(): string {
@@ -15,7 +15,7 @@ class OAuth2StateUtil {
 
   public static async getCodeChallenge(codeVerifier: string): Promise<string> {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier));
-    return CryptoUtil.base64UrlEncode(new Uint8Array(digest));
+    return CryptoUtil.toBase64Url(new Uint8Array(digest));
   }
 }
 

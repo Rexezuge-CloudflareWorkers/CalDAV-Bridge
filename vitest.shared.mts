@@ -5,7 +5,7 @@ const srcPath = (relative: string): string => fileURLToPath(new URL(relative, im
 const apiSrcPath = srcPath('./apps/api/src');
 const backgroundSrcPath = srcPath('./apps/background/src');
 const backendDataSrcPath = srcPath('./packages/backend-data/src');
-const backendErrorsSrcPath = srcPath('./packages/backend-errors/src');
+
 const backendRuntimeSrcPath = srcPath('./packages/backend-runtime/src');
 const backendServicesSrcPath = srcPath('./packages/backend-services/src');
 const providerClientsSrcPath = srcPath('./packages/provider-clients/src');
@@ -20,12 +20,20 @@ const cloudflareWorkersMockPath = srcPath('test/mocks/cloudflare-workers.ts');
  * it is aliased to a stub; the durable-object tests rely on that. The
  * `@caldav-bridge/*` aliases point at source rather than at built output, so a
  * test exercises the code the worker would run without a build step.
+ *
+ * The `@rexezuge/*` packages are **not externalized**: the kit ships ESM
+ * `dist/` with bundler-style extensionless relative imports (its own tsconfig
+ * is `moduleResolution: Bundler`), which Node's ESM resolver refuses.
+ * Vitest 4 externalizes `node_modules` deps by default and would import that
+ * dist with Node; `noExternal` keeps them in Vite's pipeline — the same
+ * resolver that bundles the worker and the SPA — so a test loads the very
+ * dist the worker ships. Without this, the run dies on `./BaseDAO` inside
+ * `@rexezuge/d1`'s `dist/index.js`.
  */
 export const sharedResolve = {
   alias: [
     { find: '@caldav-bridge/background', replacement: backgroundSrcPath },
     { find: '@caldav-bridge/backend-data', replacement: backendDataSrcPath },
-    { find: '@caldav-bridge/backend-errors', replacement: backendErrorsSrcPath },
     { find: '@caldav-bridge/backend-runtime', replacement: backendRuntimeSrcPath },
     { find: '@caldav-bridge/backend-services', replacement: backendServicesSrcPath },
     { find: '@caldav-bridge/provider-clients', replacement: providerClientsSrcPath },
@@ -34,6 +42,7 @@ export const sharedResolve = {
     { find: /^@\//, replacement: `${apiSrcPath}/` },
     { find: /^~\//, replacement: `${webSrcPath}/` },
   ],
+  noExternal: [/(^|[/\\])@rexezuge\//],
 };
 
 /**

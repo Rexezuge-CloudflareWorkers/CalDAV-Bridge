@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import type { D1Queryable as ProductionD1Queryable } from '@caldav-bridge/backend-data/utils';
+import type { D1Queryable as ProductionD1Queryable } from '@rexezuge/d1';
 
 /**
  * The `D1Queryable` a DAO accepts, re-exported so a test can name it without
@@ -50,7 +50,10 @@ function buildQueryable(database: DatabaseSync, onExecute: (options?: { inBatch?
       run: async () => {
         onExecute({ inBatch: batchDepth > 0 });
         database.prepare(sql).run(...args);
-        return { meta: { changes: changes() } };
+        // The kit's D1Result contract: a result carries an explicit success flag,
+        // because a real D1 reports a failed statement by resolving with
+        // { success: false, error } rather than by throwing.
+        return { success: true, meta: { changes: changes() } };
       },
       first: async <T>() => {
         onExecute({ inBatch: batchDepth > 0 });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PROVIDER_GOOGLE_CALENDAR, PROVIDER_MICROSOFT_OUTLOOK_CALENDAR } from '@caldav-bridge/shared/constants';
-import { InternalServerError, NotFoundError, ServiceUnavailableError } from '@caldav-bridge/backend-errors';
+import { InternalServerError, NotFoundError, ServiceUnavailableError } from '@rexezuge/errors';
+import { RetryAfterError } from '@caldav-bridge/shared';
 import { CalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar';
 
 describe('CalendarProviderUtil', () => {
@@ -560,8 +561,11 @@ describe('CalendarProviderUtil', () => {
       (error: unknown) => error,
     );
     expect(throttleError).toBeInstanceOf(ServiceUnavailableError);
-    expect((throttleError as ServiceUnavailableError).getErrorCode()).toBe(503);
-    expect((throttleError as ServiceUnavailableError).headers).toEqual({ 'Retry-After': '10' });
+    expect((throttleError as ServiceUnavailableError).status).toBe(503);
+    // The kit's taxonomy carries no transport headers, so the provider's
+    // Retry-After rides the repo's RetryAfterError carrier (see shared).
+    expect(throttleError).toBeInstanceOf(RetryAfterError);
+    expect((throttleError as RetryAfterError).headers).toEqual({ 'Retry-After': '10' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

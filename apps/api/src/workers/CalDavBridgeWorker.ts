@@ -1,35 +1,19 @@
 import { Hono } from 'hono';
-import { AbstractEntrypointWorker } from '@caldav-bridge/backend-runtime/base';
+import { AbstractEntrypointWorker } from '@rexezuge/runtime';
 import { DURABLE_OBJECT_CRON_TASKS_RUN_URL, DURABLE_OBJECT_NAMESPACE_GLOBAL } from '@caldav-bridge/backend-runtime/constants';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { createD1SessionEnv } from '@caldav-bridge/backend-data/utils';
 import { CalDavCredentialDAO } from '@caldav-bridge/backend-data/dao';
-import {
-  BadRequestError,
-  MethodNotAllowedError,
-  NotFoundError,
-  NotImplementedError,
-  PreconditionFailedError,
-  ServiceError,
-  UnauthorizedError,
-  UnsupportedMediaTypeError,
-} from '@caldav-bridge/backend-errors';
+import { BadRequestError, MethodNotAllowedError, NotFoundError, NotImplementedError, PreconditionFailedError, ServiceError, UnauthorizedError, UnsupportedMediaTypeError } from '@rexezuge/errors';
+import { RetryAfterError } from '@caldav-bridge/shared';
 import { ApplicationService } from '@caldav-bridge/backend-services/application';
 import type { CreateApplicationInput } from '@caldav-bridge/backend-services/application';
-import {
-  CalendarService,
-  DavPathUtil,
-  DavRequestParser,
-  DavResponseBuilder,
-  ICalendarUtil,
-  eventEtag,
-  ifMatchMatches,
-} from '@caldav-bridge/backend-services/calendar';
+import { CalendarService, DavPathUtil, DavRequestParser, DavResponseBuilder, ICalendarUtil, eventEtag, ifMatchMatches } from '@caldav-bridge/backend-services/calendar';
 import { CredentialService } from '@caldav-bridge/backend-services/credential';
 import { OAuth2AuthorizationService } from '@caldav-bridge/backend-services/oauth2';
 import { UserService } from '@caldav-bridge/backend-services/user';
 import type { UserIdentity } from '@caldav-bridge/backend-services/user';
-import { BaseUrlUtil, CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
+import { BaseUrlUtil, CalDavCredentialUtil } from '@caldav-bridge/shared';
 import { DAV_MULTIGET_MAX_HREFS } from '@caldav-bridge/shared/constants';
 import { validateRequestInput } from '@caldav-bridge/shared/schema';
 import type { CalendarEvent, ConnectedApplication } from '@caldav-bridge/shared/model';
@@ -444,7 +428,7 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
       } catch (error) {
         // A single missing object must not fail the whole multiget; anything
         // else is a real failure and propagates.
-        if (error instanceof ServiceError && error.getErrorCode() === 404) results.push({ href: objectHref, status: 404 });
+        if (error instanceof ServiceError && error.status === 404) results.push({ href: objectHref, status: 404 });
         else throw error;
       }
     }
@@ -532,7 +516,7 @@ async function safeDav(action: () => Promise<Response>): Promise<Response> {
   try {
     return await action();
   } catch (error) {
-    const status = error instanceof ServiceError ? error.getErrorCode() : 500;
+    const status = error instanceof ServiceError ? error.status : 500;
     if (status >= 500) {
       // Internal failures routinely carry schema, table and provider detail in
       // their message. It is logged rather than returned: the client needs to
@@ -541,11 +525,11 @@ async function safeDav(action: () => Promise<Response>): Promise<Response> {
       return DavResponseBuilder.davError(
         status,
         'The server encountered an internal error.',
-        error instanceof ServiceError ? error.headers : undefined,
+        error instanceof RetryAfterError ? error.headers : undefined,
       );
     }
     const message = error instanceof Error ? error.message : 'Internal server error.';
-    return DavResponseBuilder.davError(status, message, error instanceof ServiceError ? error.headers : undefined);
+    return DavResponseBuilder.davError(status, message, error instanceof RetryAfterError ? error.headers : undefined);
   }
 }
 

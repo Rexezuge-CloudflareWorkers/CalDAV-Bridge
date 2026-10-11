@@ -2,9 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CalDavBridgeWorker } from '@/workers';
 import { CalendarObjectMappingDAO } from '@caldav-bridge/backend-data/dao';
-import { encryptData } from '@caldav-bridge/backend-data/crypto';
+import { encryptSecret } from '@rexezuge/d1';
 import { DavPathUtil } from '@caldav-bridge/backend-services/calendar';
-import { CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
+import { CalDavCredentialUtil } from '@caldav-bridge/shared';
 import { asD1Queryable } from '../helpers/d1';
 import { applyMigrations } from '../helpers/migrations';
 
@@ -264,7 +264,8 @@ function json(value: unknown): Response {
  * the password the requests present. Written straight to SQLite so the test
  * exercises the same authentication path production does.
  */
-const MASTER_KEY = 'integration-test-master-key';
+// The kit's aes-gcm contract: base64 of exactly 32 bytes.
+const MASTER_KEY = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=';
 
 /** Provider credentials, encrypted the way the application DAO stores them. */
 const CREDENTIALS = { clientId: 'client-id', clientSecret: 'client-secret', refreshToken: 'refresh-token' };
@@ -273,7 +274,7 @@ async function seedAccount(database: DatabaseSync): Promise<void> {
   const passwordHash = await CalDavCredentialUtil.hashPassword(PASSWORD);
   // Real ciphertext: the authenticated path decrypts the application's stored
   // credentials to reach the provider, so a placeholder would not get this far.
-  const encrypted = await encryptData(JSON.stringify(CREDENTIALS), MASTER_KEY);
+  const encrypted = await encryptSecret(JSON.stringify(CREDENTIALS), MASTER_KEY);
   database
     .prepare('INSERT INTO users (email, created_at, updated_at, user_id, current_email) VALUES (?, ?, ?, ?, ?)')
     .run('owner@example.com', 100, 100, 'user-1', 'owner@example.com');
@@ -287,7 +288,7 @@ async function seedAccount(database: DatabaseSync): Promise<void> {
          encrypted_credentials, credentials_iv, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, 'google-calendar', 'oauth2', ?, ?, 'connected', 100, 100)`,
     )
-    .run(APP, 'owner@example.com', 'user-1', 'Test Application', encrypted.encrypted, encrypted.iv);
+    .run(APP, 'owner@example.com', 'user-1', 'Test Application', encrypted.ciphertext, encrypted.iv);
   database
     .prepare(
       `INSERT INTO caldav_credentials

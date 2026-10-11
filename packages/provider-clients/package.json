@@ -15,8 +15,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@caldav-bridge/backend-errors": "workspace:*",
-    "@caldav-bridge/shared": "workspace:*"
+    "@caldav-bridge/backend-runtime": "workspace:*",
+    "@caldav-bridge/shared": "workspace:*",
+    "@rexezuge/errors": "^1.0.2"
   },
   "devDependencies": {
     "@types/node": "26.6.x",

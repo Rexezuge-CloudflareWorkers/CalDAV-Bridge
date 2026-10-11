@@ -1,6 +1,6 @@
 import { UserDAO, UserEmailDAO } from '@caldav-bridge/backend-data/dao';
-import type { D1Queryable } from '@caldav-bridge/backend-data/utils';
-import { InternalServerError } from '@caldav-bridge/backend-errors';
+import type { D1Queryable } from '@rexezuge/d1';
+import { InternalServerError } from '@rexezuge/errors';
 
 interface UserIdentityEnv {
   DB: D1Queryable;

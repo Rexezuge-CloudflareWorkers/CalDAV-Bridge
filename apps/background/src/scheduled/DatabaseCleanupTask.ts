@@ -1,12 +1,6 @@
-import { TimestampUtil } from '@caldav-bridge/shared/utils';
-import {
-  CalDavCredentialDAO,
-  CalendarObjectMappingDAO,
-  ConnectedApplicationDAO,
-  OAuth2AuthorizationSessionDAO,
-  UserDAO,
-} from '@caldav-bridge/backend-data/dao';
-import type { D1Queryable } from '@caldav-bridge/backend-data/utils';
+import { TimestampUtil } from '@rexezuge/shared';
+import { CalDavCredentialDAO, CalendarObjectMappingDAO, ConnectedApplicationDAO, OAuth2AuthorizationSessionDAO, UserDAO } from '@caldav-bridge/backend-data/dao';
+import type { D1Queryable } from '@rexezuge/d1';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { IScheduledTask } from './IScheduledTask';
 import type { IEnv } from './IScheduledTask';

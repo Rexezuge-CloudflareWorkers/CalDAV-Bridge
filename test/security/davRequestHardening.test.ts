@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DavPathUtil, DavRequestParser, DavResponseBuilder, ICalendarUtil } from '@caldav-bridge/backend-services/calendar';
-import { BadRequestError } from '@caldav-bridge/backend-errors';
+import { BadRequestError } from '@rexezuge/errors';
 
 /**
  * Regression cover for the DAV request-handling defects fixed together in the

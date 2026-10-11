@@ -1,8 +1,9 @@
-import { ServiceError } from '@caldav-bridge/backend-errors';
+import { ServiceError } from '@rexezuge/errors';
 import { EmailValidationUtil } from '@caldav-bridge/backend-services/auth';
 import { UserService } from '@caldav-bridge/backend-services/user';
 import type { UserIdentity } from '@caldav-bridge/backend-services/user';
 import { Context, Next } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 type UserContext = Context<{
   Bindings: Env;
@@ -27,8 +28,11 @@ class MiddlewareHandlers {
         c.set('AuthenticatedUser', identity);
         await next();
       } catch (error: unknown) {
-        if (error instanceof ServiceError && error.getErrorCode() < 500) {
-          return c.json({ error: error.getErrorMessage() }, error.getErrorCode());
+        if (error instanceof ServiceError && error.status < 500) {
+          // The kit's status is a plain number; hono's json() takes its
+          // ContentfulStatusCode union, so the vetted status is narrowed
+          // once, here, rather than at each of this repo's routes.
+          return c.json({ error: error.message }, error.status as ContentfulStatusCode);
         }
         throw error;
       }

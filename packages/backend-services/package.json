@@ -27,9 +27,9 @@
     "@caldav-bridge/backend-runtime": "workspace:*",
     "@caldav-bridge/provider-clients": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/d1": "^1.0.1",
-    "@rexezuge/errors": "^1.0.1",
-    "@rexezuge/shared": "^1.0.1",
+    "@rexezuge/d1": "^1.0.2",
+    "@rexezuge/errors": "^1.0.2",
+    "@rexezuge/shared": "^1.0.2",
     "jose": "^6.2.12"
   },
   "devDependencies": {

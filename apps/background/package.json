@@ -18,10 +18,10 @@
     "@caldav-bridge/backend-runtime": "workspace:*",
     "@caldav-bridge/backend-services": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/d1": "^1.0.1",
-    "@rexezuge/errors": "^1.0.1",
-    "@rexezuge/runtime": "^1.0.1",
-    "@rexezuge/shared": "^1.0.1"
+    "@rexezuge/d1": "^1.0.2",
+    "@rexezuge/errors": "^1.0.2",
+    "@rexezuge/runtime": "^1.0.2",
+    "@rexezuge/shared": "^1.0.2"
   },
   "devDependencies": {
     "@types/node": "26.6.x",

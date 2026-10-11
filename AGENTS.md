@@ -63,11 +63,13 @@ Kit APIs this repo has adapted to:
 - **AES-GCM** is `encryptSecret(plaintext, key)` / `decryptSecret({ ciphertext, iv }, key)` with the kit's envelope, and the key must be **base64 of exactly 32 bytes** (`AES_ENCRYPTION_KEY`), enforced fail-closed.
 - `PayloadTooLargeError` is the 413 class name.
 
-**Dependency wiring.** The kit deps are ordinary published versions (`^1.0.1`), so CI is a plain `pnpm install` — no kit staging. Two things know about kit *HEAD*: the kit's own `consumer-matrix` job re-points this repo's deps at kit HEAD with its `relink-consumer.mjs` and runs these same gates, and a local developer can do the same deliberately:
+**Dependency wiring.** The kit deps are ordinary published versions (`^1.0.2`), so CI is a plain `pnpm install` — no kit staging. Two things know about kit *HEAD*: the kit's own `consumer-matrix` job re-points this repo's deps at kit HEAD with its `relink-consumer.mjs` and runs these same gates, and a local developer can do the same deliberately:
 
 ```bash
 node <kit>/scripts/relink-consumer.mjs --kit <kit> --consumer .   # then pnpm install
 ```
+
+All `@rexezuge/*` deps move together, root devDependencies included. A lockfile that resolves one package at 1.0.1 and another at 1.0.2 loads *two copies* of the taxonomy, and `error instanceof ServiceError` then answers false across the boundary — the service suites fail in ways that look like logic bugs and are not.
 
 **Vitest resolves the kit differently.** The kit ships ESM `dist/` with bundler-style extensionless relative imports (its own tsconfig is `moduleResolution: Bundler`), which Node's ESM resolver refuses; Vitest 4 would externalize those copies and import them with Node, failing on `./BaseDAO` inside `@rexezuge/d1`'s `dist/index.js`. `vitest.shared.mts` therefore lists the kit in `resolve.noExternal`, so the kit runs through Vite's pipeline — the same resolver that bundles the worker and the SPA — and a test loads the very dist the worker ships.
 

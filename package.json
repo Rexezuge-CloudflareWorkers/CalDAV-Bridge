@@ -18,10 +18,10 @@
     "typegen": "wrangler types --config ./apps/api/wrangler.template.jsonc --env-interface CloudflareEnv"
   },
   "devDependencies": {
-    "@rexezuge/d1": "^1.0.1",
-    "@rexezuge/errors": "^1.0.1",
-    "@rexezuge/runtime": "^1.0.1",
-    "@rexezuge/shared": "^1.0.1",
+    "@rexezuge/d1": "^1.0.2",
+    "@rexezuge/errors": "^1.0.2",
+    "@rexezuge/runtime": "^1.0.2",
+    "@rexezuge/shared": "^1.0.2",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/node": "26.6.x",

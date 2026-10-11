@@ -1,6 +1,6 @@
 import type { ConnectedApplication } from '../../types';
+import { ReadOnlyField } from '@rexezuge/web';
 import { ConnectionBadge } from '../ui/Badge';
-import { CopyField } from '../shared/CopyField';
 
 export function ConnectionDetails({ application }: { application: ConnectedApplication }) {
   return (
@@ -16,8 +16,8 @@ export function ConnectionDetails({ application }: { application: ConnectedAppli
           <span className="text-xs text-[var(--color-text-muted)]">Status</span>
           <ConnectionBadge status={application.status} />
         </div>
-        <CopyField label="Redirect URI" value={application.oauth2RedirectUri} />
-        <CopyField label="CalDAV URL" value={application.caldavBaseUrl} />
+        <ReadOnlyField label="Redirect URI" value={application.oauth2RedirectUri ?? ''} showCopy={!!application.oauth2RedirectUri} copyLabel="Copy Redirect URI" />
+        <ReadOnlyField label="CalDAV URL" value={application.caldavBaseUrl ?? ''} showCopy={!!application.caldavBaseUrl} copyLabel="Copy CalDAV URL" />
       </div>
     </div>
   );

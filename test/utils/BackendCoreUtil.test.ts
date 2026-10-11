@@ -4,8 +4,15 @@ import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { errorResponse, jsonResponse, textResponse } from '@caldav-bridge/backend-runtime/http';
 import { RetryAfterError } from '@caldav-bridge/shared';
 import { decryptSecret, encryptSecret } from '@rexezuge/d1';
-import { OAuth2StateUtil } from '@caldav-bridge/backend-services/oauth2';
-import { CryptoUtil, TimestampUtil, UUIDUtil } from '@rexezuge/shared';
+import {
+  CryptoUtil,
+  generateCodeVerifier,
+  generateState,
+  getCodeChallenge,
+  getStateHash,
+  TimestampUtil,
+  UUIDUtil,
+} from '@rexezuge/shared';
 import { BaseUrlUtil } from '@caldav-bridge/shared';
 
 describe('backend core utilities', () => {
@@ -83,10 +90,12 @@ describe('backend core utilities', () => {
   });
 
   it('generates OAuth2 state values, hashes state, and computes RFC 7636 PKCE challenges', async () => {
-    expect(OAuth2StateUtil.generateState()).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(OAuth2StateUtil.generateCodeVerifier()).toMatch(/^[A-Za-z0-9_-]{86}$/);
-    await expect(OAuth2StateUtil.getStateHash('state-value')).resolves.toMatch(/^[0-9a-f]{64}$/);
-    await expect(OAuth2StateUtil.getCodeChallenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).resolves.toBe(
+    // The kit's `@rexezuge/shared` OAuth2 PKCE helpers, which the authorization
+    // service uses directly — there is no repo-local copy of these.
+    expect(generateState()).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(generateCodeVerifier()).toMatch(/^[A-Za-z0-9_-]{86}$/);
+    await expect(getStateHash('state-value')).resolves.toMatch(/^[0-9a-f]{64}$/);
+    await expect(getCodeChallenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).resolves.toBe(
       'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
     );
   });

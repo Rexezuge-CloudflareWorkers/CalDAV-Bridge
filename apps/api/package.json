@@ -12,10 +12,11 @@
     "@caldav-bridge/backend-services": "workspace:*",
     "@caldav-bridge/background": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/d1": "^1.0.2",
-    "@rexezuge/errors": "^1.0.2",
-    "@rexezuge/runtime": "^1.0.2",
-    "@rexezuge/shared": "^1.0.2",
+    "@rexezuge/d1": "1.2.0",
+    "@rexezuge/errors": "1.2.0",
+    "@rexezuge/http": "1.2.0",
+    "@rexezuge/runtime": "1.2.0",
+    "@rexezuge/shared": "1.2.0",
     "hono": "^4.13.13"
   },
   "devDependencies": {

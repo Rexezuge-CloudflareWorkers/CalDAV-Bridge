@@ -12,7 +12,7 @@ type D1Queryable = ProductionD1Queryable;
 interface D1LikeStatement {
   bind(...bindings: unknown[]): D1LikeStatement;
   run(): Promise<{ meta: { changes: number } }>;
-  first<T>(): Promise<T | undefined>;
+  first<T>(): Promise<T | null>;
   all<T>(): Promise<{ results: T[] }>;
 }
 
@@ -57,7 +57,11 @@ function buildQueryable(database: DatabaseSync, onExecute: (options?: { inBatch?
       },
       first: async <T>() => {
         onExecute({ inBatch: batchDepth > 0 });
-        return database.prepare(sql).get(...args) as T | undefined;
+        // `null`, not `undefined`: that is what `D1Result.first()` resolves for
+        // an absent row, and it is the shape the kit's `BaseDAO` hands through
+        // unchanged. A shim that answered `undefined` would let the suite agree
+        // with code the deployed worker never runs.
+        return (database.prepare(sql).get(...args) ?? null) as T | null;
       },
       all: async <T>() => {
         onExecute({ inBatch: batchDepth > 0 });

@@ -9,17 +9,26 @@ importers:
   .:
     devDependencies:
       '@rexezuge/d1':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/errors':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
+      '@rexezuge/http':
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/runtime':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/shared':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
+      '@rexezuge/tooling':
+        specifier: 1.2.0
+        version: 1.2.0(eslint@10.12.0(jiti@2.7.0))(jsonc-parser@3.3.1)(prettier@3.9.9)(typescript-eslint@8.71.1(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3))(typescript@6.0.3)(vitest@4.1.11)
+      '@rexezuge/web':
+        specifier: 1.2.0
+        version: 1.2.0(lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2
@@ -37,7 +46,7 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: ^6.1.x
-        version: 6.1.2(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
+        version: 6.1.2(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
       '@vitest/coverage-v8':
         specifier: ^4.1.x
         version: 4.1.11(vitest@4.1.11)
@@ -59,9 +68,6 @@ importers:
       happy-dom:
         specifier: ^20.14.5
         version: 20.14.5
-      jose:
-        specifier: ^6.2.12
-        version: 6.2.12
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
@@ -85,10 +91,10 @@ importers:
         version: 8.71.1(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3)
       vite:
         specifier: ^8.3.x
-        version: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)
+        version: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@26.6.4)(@vitest/coverage-v8@4.1.11)(happy-dom@20.14.5)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
+        version: 4.1.11(@types/node@26.6.4)(@vitest/coverage-v8@4.1.11)(happy-dom@20.14.5)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
       wrangler:
         specifier: ^4.147.0
         version: 4.147.0(@types/node@26.6.4)
@@ -111,17 +117,20 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@rexezuge/d1':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/errors':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
+      '@rexezuge/http':
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/runtime':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/shared':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       hono:
         specifier: ^4.13.13
         version: 4.13.13
@@ -148,17 +157,17 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@rexezuge/d1':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/errors':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/runtime':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/shared':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -169,6 +178,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@rexezuge/web':
+        specifier: 1.2.0
+        version: 1.2.0(lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -188,9 +200,12 @@ importers:
         specifier: 3.7.0
         version: 3.7.0
     devDependencies:
+      '@rexezuge/tooling':
+        specifier: 1.2.0
+        version: 1.2.0(eslint@10.12.0(jiti@2.7.0))(jsonc-parser@3.3.1)(prettier@3.9.9)(typescript-eslint@8.71.1(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3))(typescript@6.0.3)(vitest@4.1.11)
       '@tailwindcss/vite':
         specifier: ^4.3.x
-        version: 4.3.3(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
+        version: 4.3.3(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
       '@types/node':
         specifier: 26.6.x
         version: 26.6.4
@@ -202,16 +217,13 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: ^6.1.x
-        version: 6.1.2(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
-      terser:
-        specifier: ^5.51.x
-        version: 5.51.2
+        version: 6.1.2(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
         specifier: ^8.3.x
-        version: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)
+        version: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
 
   packages/backend-data:
     dependencies:
@@ -219,14 +231,14 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/d1':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/errors':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/shared':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -241,11 +253,11 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/errors':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/runtime':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -269,17 +281,14 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/d1':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/errors':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       '@rexezuge/shared':
-        specifier: ^1.0.2
-        version: 1.0.2
-      jose:
-        specifier: ^6.2.12
-        version: 6.2.12
+        specifier: 1.2.0
+        version: 1.2.0
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -297,8 +306,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/errors':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -310,8 +319,8 @@ importers:
   packages/shared:
     dependencies:
       '@rexezuge/shared':
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: 1.2.0
+        version: 1.2.0
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -324,6 +333,11 @@ importers:
         version: 6.0.3
 
 packages:
+
+  '@asteasolutions/zod-to-openapi@8.5.0':
+    resolution: {integrity: sha512-SABbKiObg5dLRiTFnqiW1WWwGcg1BJfmHtT2asIBnBHg6Smy/Ms2KHc650+JI4Hw7lSkdiNebEGXpwoxfben8Q==}
+    peerDependencies:
+      zod: ^4.0.0
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -1030,17 +1044,37 @@ packages:
   '@poppinss/exception@1.2.3':
     resolution: {integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==}
 
-  '@rexezuge/d1@1.0.2':
-    resolution: {integrity: sha512-phV6Pe/FxW3BBYW8gIeXMLxmRJn4vz+bqoEQ2Ve2Dtv7inmFeN3UkWM/CaKIx3AOoNq60lDp6WcMrqHZixDKSA==}
+  '@rexezuge/d1@1.2.0':
+    resolution: {integrity: sha512-3E7fPSiUkkVhaBb2+xcQKD/f/c3DeBwVvw7bNVUH6DyGABLAyKYY1+8XwQC5tGbkHNhyzSCigcDu4ZspM0bJNw==}
 
-  '@rexezuge/errors@1.0.2':
-    resolution: {integrity: sha512-7Hkoz/0vZqOxc45nl9b/aCgAxK5H5TrtbFMscKMrKfNb8numnncVoRXqeZ5m765SJOFq5SBl8H+780BWO1pP9Q==}
+  '@rexezuge/errors@1.2.0':
+    resolution: {integrity: sha512-9dhTdr79H8nZmAZBBvnhKEAScT8oF1Uirir1zQ2cU1WxPjHyF3YidvFPhz00ADRcRQf4vVbR0QPgR6ZfY+malQ==}
 
-  '@rexezuge/runtime@1.0.2':
-    resolution: {integrity: sha512-7tx4l3zhrSY2KZ+1KlA+SH+N9D4vY5/QkEfvfNqMmpXfRO/riamFOlPi10j6UrwWBkTdfg6M5wVQaeBTqtY9gw==}
+  '@rexezuge/http@1.2.0':
+    resolution: {integrity: sha512-6yHtxtvXUxbfFU8wdnPYrRoh/z6uMbaPyPycWQm3fcDm73MVNCN27fwmMMDV99Sr3ihNtkOlP+mzzAHcjWdBEw==}
 
-  '@rexezuge/shared@1.0.2':
-    resolution: {integrity: sha512-Nnh6WlpXY8fdHZrXkoPeh15Il86TaFt7QuTB+Wi9/GMQ9unJOHdrOEmd1tSUJ/TKfgo4CVWpHoCrYR7dWF+imQ==}
+  '@rexezuge/runtime@1.2.0':
+    resolution: {integrity: sha512-goI4a2MY93YKhlnZTEzorAPPx6q38ntH6rCizneLkRO7SaHZoTeJtAlqugU+Rnww0xpy5F0VK0kgHVhzE7UXtg==}
+
+  '@rexezuge/shared@1.2.0':
+    resolution: {integrity: sha512-lHWZt6eYXrR9D5QYbj4reYWUhqk07LkXq9YTfOgOQWizsEfLTokDdR3o83HU6DOLMFhBwy4UUxNx312845L2jA==}
+
+  '@rexezuge/tooling@1.2.0':
+    resolution: {integrity: sha512-e58Z7Fj+//jxnY73PhQY0XQ/OaQU+bINOEWo5ouA01diaaKRp0voa9+KzucmYJ2orEz73BTLhNYrZDb+Xh9V7w==}
+    peerDependencies:
+      eslint: ^10.0.0
+      jsonc-parser: ^3.3.1
+      prettier: ^3.9.0
+      typescript: ^6.0.0
+      typescript-eslint: ^8.0.0
+      vitest: ^4.0.0
+
+  '@rexezuge/web@1.2.0':
+    resolution: {integrity: sha512-CxWCXhjAMeEk9NiZf5QlfP/g/B8AeJzLDOL3U6dFWGIblL/TC9Y8EGqLVzR9Ob1pVRGtYTweRFZSUywC5Gh/PQ==}
+    peerDependencies:
+      lucide-react: ^1.49.0
+      react: ^19.3.0
+      react-dom: ^19.3.0
 
   '@rolldown/binding-android-arm-eabi@1.2.12':
     resolution: {integrity: sha512-dB/a1214qKfHMXCpgqR4OZT+jS4kTyEXbQGJPqzobt5EwH5rX080pxE37alt3RzvR1bf1Yz/yGqRfrYAxuPw0A==}
@@ -1438,6 +1472,9 @@ packages:
     resolution: {integrity: sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==}
     engines: {node: '>=10'}
 
+  argparse@2.0.1:
+    resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
+
   aria-query@5.3.0:
     resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}
 
@@ -1485,6 +1522,11 @@ packages:
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
+
+  chanfana@3.4.0:
+    resolution: {integrity: sha512-zNXyjQWnuhxd2m5QOQjAT7dCi8jg/SXckhD3y/Z6PKJfsf/XfSlvxyxFJpJh8O19lrvrsM4SUgEz2628imtWJQ==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   class-variance-authority@0.7.1:
     resolution: {integrity: sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==}
@@ -1776,6 +1818,10 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
+  js-yaml@4.3.2:
+    resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
+    hasBin: true
+
   jsesc@3.1.0:
     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
     engines: {node: '>=6'}
@@ -2010,6 +2056,9 @@ packages:
   obug@2.1.4:
     resolution: {integrity: sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA==}
     engines: {node: '>=12.20.0'}
+
+  openapi3-ts@4.6.1:
+    resolution: {integrity: sha512-XW9MOldkhoICNeXVzzmXzmOW5G73ppOEGmh7fLCqHjgfdEYCGGN+00MlVCeUZgovjjfC56j9tvtDt1zGabNjjA==}
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -2366,6 +2415,15 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  yaml@2.9.1:
+    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
+  yargs-parser@22.0.0:
+    resolution: {integrity: sha512-rwu/ClNdSMpkSrUb+d6BRsSkLUq1fmfsY6TOpYzTwvwkg1/NRG85KBy3kq++A8LKQwX6lsu+aWad+2khvuXrqw==}
+    engines: {node: ^20.19.0 || ^22.12.0 || >=23}
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
@@ -2389,6 +2447,11 @@ packages:
     resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
 snapshots:
+
+  '@asteasolutions/zod-to-openapi@8.5.0(zod@4.6.5)':
+    dependencies:
+      openapi3-ts: 4.6.1
+      zod: 4.6.5
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -2901,16 +2964,42 @@ snapshots:
 
   '@poppinss/exception@1.2.3': {}
 
-  '@rexezuge/d1@1.0.2':
+  '@rexezuge/d1@1.2.0':
     dependencies:
-      '@rexezuge/errors': 1.0.2
-      '@rexezuge/shared': 1.0.2
+      '@rexezuge/errors': 1.2.0
+      '@rexezuge/shared': 1.2.0
 
-  '@rexezuge/errors@1.0.2': {}
+  '@rexezuge/errors@1.2.0': {}
 
-  '@rexezuge/runtime@1.0.2': {}
+  '@rexezuge/http@1.2.0':
+    dependencies:
+      '@rexezuge/errors': 1.2.0
+      '@rexezuge/shared': 1.2.0
+      chanfana: 3.4.0
+      hono: 4.13.13
+      jose: 6.2.12
 
-  '@rexezuge/shared@1.0.2': {}
+  '@rexezuge/runtime@1.2.0': {}
+
+  '@rexezuge/shared@1.2.0': {}
+
+  '@rexezuge/tooling@1.2.0(eslint@10.12.0(jiti@2.7.0))(jsonc-parser@3.3.1)(prettier@3.9.9)(typescript-eslint@8.71.1(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3))(typescript@6.0.3)(vitest@4.1.11)':
+    dependencies:
+      '@rexezuge/d1': 1.2.0
+      eslint: 10.12.0(jiti@2.7.0)
+      jsonc-parser: 3.3.1
+      prettier: 3.9.9
+      typescript: 6.0.3
+      typescript-eslint: 8.71.1(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3)
+      vitest: 4.1.11(@types/node@26.6.4)(@vitest/coverage-v8@4.1.11)(happy-dom@20.14.5)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
+
+  '@rexezuge/web@1.2.0(lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      '@rexezuge/errors': 1.2.0
+      '@rexezuge/shared': 1.2.0
+      lucide-react: 1.52.0(@types/react@19.3.0)(react@19.3.0)
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
 
   '@rolldown/binding-android-arm-eabi@1.2.12':
     optional: true
@@ -3026,12 +3115,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/vite@4.3.3(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))':
+  '@tailwindcss/vite@4.3.3(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)
+      vite: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
 
   '@testing-library/dom@10.4.2':
     dependencies:
@@ -3178,10 +3267,10 @@ snapshots:
       '@typescript-eslint/types': 8.71.1
       eslint-visitor-keys: 5.0.1
 
-  '@vitejs/plugin-react@6.1.2(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))':
+  '@vitejs/plugin-react@6.1.2(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)
+      vite: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
 
   '@vitest/coverage-v8@4.1.11(vitest@4.1.11)':
     dependencies:
@@ -3195,7 +3284,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@26.6.4)(@vitest/coverage-v8@4.1.11)(happy-dom@20.14.5)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
+      vitest: 4.1.11(@types/node@26.6.4)(@vitest/coverage-v8@4.1.11)(happy-dom@20.14.5)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
 
   '@vitest/expect@4.1.11':
     dependencies:
@@ -3206,13 +3295,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
-  '@vitest/mocker@4.1.11(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))':
+  '@vitest/mocker@4.1.11(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@vitest/spy': 4.1.11
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)
+      vite: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
 
   '@vitest/pretty-format@4.1.11':
     dependencies:
@@ -3256,6 +3345,8 @@ snapshots:
   ansi-regex@5.0.1: {}
 
   ansi-styles@5.2.0: {}
+
+  argparse@2.0.1: {}
 
   aria-query@5.3.0:
     dependencies:
@@ -3304,6 +3395,14 @@ snapshots:
   caniuse-lite@1.0.30001810: {}
 
   chai@6.2.2: {}
+
+  chanfana@3.4.0:
+    dependencies:
+      '@asteasolutions/zod-to-openapi': 8.5.0(zod@4.6.5)
+      js-yaml: 4.3.2
+      openapi3-ts: 4.6.1
+      yargs-parser: 22.0.0
+      zod: 4.6.5
 
   class-variance-authority@0.7.1:
     dependencies:
@@ -3618,6 +3717,10 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
+  js-yaml@4.3.2:
+    dependencies:
+      argparse: 2.0.1
+
   jsesc@3.1.0: {}
 
   json-schema-traverse@0.4.1: {}
@@ -3793,6 +3896,10 @@ snapshots:
   node-releases@2.0.54: {}
 
   obug@2.1.4: {}
+
+  openapi3-ts@4.6.1:
+    dependencies:
+      yaml: 2.9.1
 
   optionator@0.9.4:
     dependencies:
@@ -4023,7 +4130,7 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15):
+  vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -4037,11 +4144,12 @@ snapshots:
       jiti: 2.7.0
       terser: 5.51.2
       tsx: 4.23.15
+      yaml: 2.9.1
 
-  vitest@4.1.11(@types/node@26.6.4)(@vitest/coverage-v8@4.1.11)(happy-dom@20.14.5)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)):
+  vitest@4.1.11(@types/node@26.6.4)(@vitest/coverage-v8@4.1.11)(happy-dom@20.14.5)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@vitest/expect': 4.1.11
-      '@vitest/mocker': 4.1.11(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
+      '@vitest/mocker': 4.1.11(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
       '@vitest/pretty-format': 4.1.11
       '@vitest/runner': 4.1.11
       '@vitest/snapshot': 4.1.11
@@ -4058,7 +4166,7 @@ snapshots:
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.1
-      vite: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)
+      vite: 8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 26.6.4
@@ -4108,6 +4216,10 @@ snapshots:
   ws@8.21.0: {}
 
   yallist@3.1.1: {}
+
+  yaml@2.9.1: {}
+
+  yargs-parser@22.0.0: {}
 
   yocto-queue@0.1.0: {}
 

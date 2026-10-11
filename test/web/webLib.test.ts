@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cn } from '~/lib/utils';
-import { NOTICE_TIMEOUT_MS } from '~/lib/constants';
+import { NOTICE_TIMEOUT_MS } from '@rexezuge/web';
 import { parseRoute, providerLabels, routePath } from '~/types';
 import type { ProviderId } from '~/types';
 

@@ -54,7 +54,7 @@ function providerError(response: Response, text: string, data: { error?: { messa
   if (response.status === 412) return new PreconditionFailedError('The calendar object was modified elsewhere.');
   if (response.status === 429) {
     // The kit's taxonomy carries no response headers, so the retry hint rides
-    // the repo's own RetryAfterError (see backend-runtime/http) — one named
+    // the repo's own RetryAfterError (`@caldav-bridge/shared`) — one named
     // carrier instead of a header bag on the base class.
     const retryAfter = response.headers.get('Retry-After');
     return retryAfter

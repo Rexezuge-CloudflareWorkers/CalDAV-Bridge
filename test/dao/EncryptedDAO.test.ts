@@ -33,8 +33,15 @@ class SealedDAO extends EncryptedDAO {
     return encryptSecret(value, this.masterKey);
   }
 
-  /** Read one row through the kit's `first`, so the inherited surface is exercised. */
-  public async readRow(email: string): Promise<{ email: string } | undefined> {
+  /**
+   * Read one row through the kit's `first`, so the inherited surface is
+   * exercised.
+   *
+   * The kit answers `null` for an absent row, matching `D1Result.first()` and
+   * `KVNamespace.get()`; DAO boundaries that publish `undefined` normalize it
+   * themselves (`?? undefined`), which is what the repo's other DAOs do.
+   */
+  public async readRow(email: string): Promise<{ email: string } | null> {
     return this.first<{ email: string }>('SELECT email FROM users WHERE email = ? LIMIT 1', [email]);
   }
 }
@@ -67,7 +74,7 @@ describe('EncryptedDAO', () => {
   it('is a BaseDAO: the sql-first read surface is inherited, not reimplemented', async () => {
     const dao = new SealedDAO(openDatabase());
     expect(dao).toBeInstanceOf(BaseDAO);
-    expect(await dao.readRow('absent@example.test')).toBeUndefined();
+    expect(await dao.readRow('absent@example.test')).toBeNull();
   });
 });
 

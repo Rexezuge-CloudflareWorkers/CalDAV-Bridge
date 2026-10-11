@@ -17,6 +17,13 @@ const DEFAULT_KV_NAMESPACE_NAMES: Record<string, string> = {
 interface WranglerConfig {
   name?: string;
   vars?: Record<string, unknown>;
+  durable_objects?: {
+    bindings?: Array<{
+      name?: string;
+      class_name?: string;
+    }>;
+  };
+  migrations?: Array<Record<string, unknown>>;
   d1_databases?: Array<{
     binding?: string;
     database_id?: string;
@@ -113,6 +120,26 @@ function prepareConfigFile(): void {
 
   copyFileSync(TEMPLATE_PATH, CONFIG_PATH);
   console.log('WRANGLER_JSONC is empty; copied apps/api/wrangler.template.jsonc to wrangler.jsonc.');
+}
+
+function enforceDurableObjectConfig(): void {
+  const template = parse(readFileSync(TEMPLATE_PATH, 'utf8')) as WranglerConfig;
+  const { content, config } = readConfig();
+  const templateBindings = template.durable_objects ?? { bindings: [] };
+  const templateMigrations = template.migrations ?? [];
+  if (JSON.stringify(config.durable_objects ?? {}) === JSON.stringify(templateBindings) && JSON.stringify(config.migrations ?? []) === JSON.stringify(templateMigrations)) {
+    return;
+  }
+
+  const staleBindings = (config.durable_objects?.bindings ?? []).filter((binding) => binding.class_name === 'OAuth2TokenRefreshWorker');
+  if (staleBindings.length > 0) {
+    console.log('Dropping stale OAuth2TokenRefreshWorker durable object binding(s) from wrangler.jsonc; the class was removed and must not be bound.');
+  }
+
+  let next = writeConfigValue(content, ['durable_objects'], templateBindings);
+  next = writeConfigValue(next, ['migrations'], templateMigrations);
+  writeFileSync(CONFIG_PATH, next.endsWith('\n') ? next : `${next}\n`);
+  console.log('Enforced durable_objects/migrations from apps/api/wrangler.template.jsonc.');
 }
 
 function applyVarsPatch(): void {
@@ -302,6 +329,7 @@ function provisionWranglerResources(): void {
 }
 
 prepareConfigFile();
+enforceDurableObjectConfig();
 applyVarsPatch();
 provisionWranglerResources();
 console.log('Wrangler configuration is ready.');

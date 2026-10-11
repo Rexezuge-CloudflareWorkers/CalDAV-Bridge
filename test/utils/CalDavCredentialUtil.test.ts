@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
+import { CalDavCredentialUtil } from '@caldav-bridge/shared';
 
 describe('CalDavCredentialUtil', () => {
   it('generates CalDAV Bridge app passwords with metadata', async () => {

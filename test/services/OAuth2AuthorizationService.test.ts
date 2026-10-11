@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError } from '@caldav-bridge/backend-errors';
+import { BadRequestError } from '@rexezuge/errors';
 
 const { sessionSpies, tokenSpies } = vi.hoisted(() => ({
   sessionSpies: {

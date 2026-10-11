@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenError, NotFoundError } from '@caldav-bridge/backend-errors';
+import { ForbiddenError, NotFoundError } from '@rexezuge/errors';
 import { PROVIDER_GOOGLE_CALENDAR } from '@caldav-bridge/shared/constants';
 import { CalendarService } from '@caldav-bridge/backend-services/calendar';
 

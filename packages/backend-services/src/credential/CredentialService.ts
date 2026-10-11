@@ -1,10 +1,11 @@
 import { CalDavCredentialDAO } from '@caldav-bridge/backend-data/dao';
-import type { D1Queryable } from '@caldav-bridge/backend-data/utils';
-import { BadRequestError, InternalServerError } from '@caldav-bridge/backend-errors';
+import type { D1Queryable } from '@rexezuge/d1';
+import { BadRequestError, InternalServerError } from '@rexezuge/errors';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { CONNECTED_APPLICATION_STATUS_CONNECTED } from '@caldav-bridge/shared/constants';
 import type { CalDavCredentialMetadata, ConnectedApplication } from '@caldav-bridge/shared/model';
-import { CalDavCredentialUtil, TimestampUtil } from '@caldav-bridge/shared/utils';
+import { TimestampUtil } from '@rexezuge/shared';
+import { CalDavCredentialUtil } from '@caldav-bridge/shared';
 
 interface CredentialServiceEnv {
   DB: D1Queryable;

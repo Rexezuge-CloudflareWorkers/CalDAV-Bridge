@@ -2,8 +2,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CalDavBridgeWorker } from '@/workers';
 import { DavPathUtil } from '@caldav-bridge/backend-services/calendar';
-import { encryptData } from '@caldav-bridge/backend-data/crypto';
-import { CalDavCredentialUtil } from '@caldav-bridge/shared/utils';
+import { encryptSecret } from '@rexezuge/d1';
+import { CalDavCredentialUtil } from '@caldav-bridge/shared';
 import { asD1Queryable } from '../helpers/d1';
 import { applyMigrations } from '../helpers/migrations';
 
@@ -11,7 +11,8 @@ const APP = 'app-1';
 const CAL = 'primary@example.com';
 const USERNAME = 'dav-user';
 const PASSWORD = 'dav-password';
-const MASTER_KEY = 'conformance-test-master-key';
+// The kit's aes-gcm contract: base64 of exactly 32 bytes.
+const MASTER_KEY = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=';
 const COLLECTION = `/dav/calendars/${APP}/${encodeURIComponent(CAL)}/`;
 const WORKER_URL = 'https://bridge.example.test';
 
@@ -431,7 +432,7 @@ function json(value: unknown): Response {
 
 async function seedAccount(database: DatabaseSync): Promise<void> {
   const passwordHash = await CalDavCredentialUtil.hashPassword(PASSWORD);
-  const encrypted = await encryptData(
+  const encrypted = await encryptSecret(
     JSON.stringify({ clientId: 'client-id', clientSecret: 'secret', refreshToken: 'refresh' }),
     MASTER_KEY,
   );
@@ -448,7 +449,7 @@ async function seedAccount(database: DatabaseSync): Promise<void> {
          encrypted_credentials, credentials_iv, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, 'google-calendar', 'oauth2', ?, ?, 'connected', 100, 100)`,
     )
-    .run(APP, 'owner@example.com', 'user-1', 'Test Application', encrypted.encrypted, encrypted.iv);
+    .run(APP, 'owner@example.com', 'user-1', 'Test Application', encrypted.ciphertext, encrypted.iv);
   database
     .prepare(
       `INSERT INTO caldav_credentials

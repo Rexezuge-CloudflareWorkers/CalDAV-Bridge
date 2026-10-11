@@ -1,4 +1,4 @@
-import type { D1Queryable } from '@caldav-bridge/backend-data/utils';
+import type { D1Queryable } from '@rexezuge/d1';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { UserIdentityService } from './UserIdentityService';
 import type { UserIdentity } from './UserIdentityService';

@@ -1,6 +1,6 @@
 import { ConnectedApplicationDAO } from '@caldav-bridge/backend-data/dao';
-import type { D1Queryable } from '@caldav-bridge/backend-data/utils';
-import { InternalServerError } from '@caldav-bridge/backend-errors';
+import type { D1Queryable } from '@rexezuge/d1';
+import { InternalServerError } from '@rexezuge/errors';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import { CalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar';
 import { OAuth2ProviderUtil } from '@caldav-bridge/provider-clients/oauth2';

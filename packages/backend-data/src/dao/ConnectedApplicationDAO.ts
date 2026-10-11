@@ -1,19 +1,8 @@
-import {
-  CONNECTED_APPLICATION_STATUS_CONNECTED,
-  CONNECTED_APPLICATION_STATUS_DRAFT,
-  CONNECTED_APPLICATION_STATUS_ERROR,
-  CONNECTION_METHOD_OAUTH2,
-} from '@caldav-bridge/shared/constants';
-import type {
-  ConnectedApplication,
-  ConnectedApplicationCredentials,
-  ConnectedApplicationInternal,
-  ConnectedApplicationMetadata,
-  OAuth2Credentials,
-} from '@caldav-bridge/shared/model';
-import { TimestampUtil, UUIDUtil } from '@caldav-bridge/shared/utils';
-import { decryptData, encryptData } from '../crypto';
-import { EncryptedDAO } from './BaseDAO';
+import { CONNECTED_APPLICATION_STATUS_CONNECTED, CONNECTED_APPLICATION_STATUS_DRAFT, CONNECTED_APPLICATION_STATUS_ERROR, CONNECTION_METHOD_OAUTH2 } from '@caldav-bridge/shared/constants';
+import type { ConnectedApplication, ConnectedApplicationCredentials, ConnectedApplicationInternal, ConnectedApplicationMetadata, OAuth2Credentials } from '@caldav-bridge/shared/model';
+import { TimestampUtil, UUIDUtil } from '@rexezuge/shared';
+import { decryptSecret, encryptSecret } from '@rexezuge/d1';
+import { EncryptedDAO } from './EncryptedDAO';
 
 class ConnectedApplicationDAO extends EncryptedDAO {
   public async create(
@@ -24,7 +13,7 @@ class ConnectedApplicationDAO extends EncryptedDAO {
   ): Promise<ConnectedApplicationMetadata> {
     const now = TimestampUtil.getCurrentUnixTimestampInSeconds();
     const applicationId = UUIDUtil.getRandomUUID();
-    const encrypted = await encryptData(JSON.stringify(credentials), this.masterKey);
+    const sealed = await encryptSecret(JSON.stringify(credentials), this.masterKey);
     // `user_email` stays the account's frozen anchor because
     // `connected_applications` carries `FOREIGN KEY (user_email) REFERENCES
     // users(email)`. Deriving it here rather than taking it as a parameter means
@@ -45,8 +34,8 @@ class ConnectedApplicationDAO extends EncryptedDAO {
         displayName,
         providerId,
         CONNECTION_METHOD_OAUTH2,
-        encrypted.encrypted,
-        encrypted.iv,
+        sealed.ciphertext,
+        sealed.iv,
         CONNECTED_APPLICATION_STATUS_DRAFT,
         null,
         now,
@@ -67,7 +56,7 @@ class ConnectedApplicationDAO extends EncryptedDAO {
     const now = TimestampUtil.getCurrentUnixTimestampInSeconds();
     const existing = await this.getByIdForUser(applicationId, userId);
     if (!existing) return undefined;
-    const encrypted = await encryptData(
+    const sealed = await encryptSecret(
       JSON.stringify({ ...credentials, refreshToken: existing.credentials.refreshToken }),
       this.masterKey,
     );
@@ -79,7 +68,7 @@ class ConnectedApplicationDAO extends EncryptedDAO {
           WHERE application_id = ? AND user_id = ?
         `,
       )
-      .bind(displayName, encrypted.encrypted, encrypted.iv, now, applicationId, userId)
+      .bind(displayName, sealed.ciphertext, sealed.iv, now, applicationId, userId)
       .run();
     return this.getMetadataByIdForUser(applicationId, userId);
   }
@@ -127,7 +116,7 @@ class ConnectedApplicationDAO extends EncryptedDAO {
     const application = await this.getById(applicationId);
     if (!application) throw new Error('OAuth2 application was not found.');
     const credentials: OAuth2Credentials = { ...application.credentials, refreshToken };
-    const encrypted = await encryptData(JSON.stringify(credentials), this.masterKey);
+    const sealed = await encryptSecret(JSON.stringify(credentials), this.masterKey);
     const now = TimestampUtil.getCurrentUnixTimestampInSeconds();
     await this.database
       .prepare(
@@ -137,17 +126,17 @@ class ConnectedApplicationDAO extends EncryptedDAO {
           WHERE application_id = ?
         `,
       )
-      .bind(encrypted.encrypted, encrypted.iv, providerEmail, CONNECTED_APPLICATION_STATUS_CONNECTED, now, applicationId)
+      .bind(sealed.ciphertext, sealed.iv, providerEmail, CONNECTED_APPLICATION_STATUS_CONNECTED, now, applicationId)
       .run();
   }
 
   public async updateOAuth2RefreshToken(applicationId: string, refreshToken: string): Promise<void> {
     const application = await this.getById(applicationId);
     if (!application) return;
-    const encrypted = await encryptData(JSON.stringify({ ...application.credentials, refreshToken }), this.masterKey);
+    const sealed = await encryptSecret(JSON.stringify({ ...application.credentials, refreshToken }), this.masterKey);
     await this.database
       .prepare('UPDATE connected_applications SET encrypted_credentials = ?, credentials_iv = ? WHERE application_id = ?')
-      .bind(encrypted.encrypted, encrypted.iv, applicationId)
+      .bind(sealed.ciphertext, sealed.iv, applicationId)
       .run();
   }
 
@@ -213,7 +202,7 @@ class ConnectedApplicationDAO extends EncryptedDAO {
   }
 
   private async toApplication(row: ConnectedApplicationInternal): Promise<ConnectedApplication> {
-    const decryptedCredentials = await decryptData(row.encrypted_credentials, row.credentials_iv, this.masterKey);
+    const decryptedCredentials = await decryptSecret({ ciphertext: row.encrypted_credentials, iv: row.credentials_iv }, this.masterKey);
     return { ...this.toMetadata(row), credentials: JSON.parse(decryptedCredentials) as ConnectedApplicationCredentials };
   }
 

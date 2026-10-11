@@ -1,10 +1,5 @@
-import {
-  BadRequestError,
-  InternalServerError,
-  NotFoundError,
-  PreconditionFailedError,
-  ServiceUnavailableError,
-} from '@caldav-bridge/backend-errors';
+import { BadRequestError, InternalServerError, NotFoundError, PreconditionFailedError, ServiceUnavailableError } from '@rexezuge/errors';
+import { RetryAfterError } from '@caldav-bridge/shared';
 
 const MAX_THROTTLE_RETRY_ATTEMPTS = 2;
 const MAX_RETRY_AFTER_SECONDS = 2;
@@ -58,10 +53,13 @@ function providerError(response: Response, text: string, data: { error?: { messa
   // silently dropped.
   if (response.status === 412) return new PreconditionFailedError('The calendar object was modified elsewhere.');
   if (response.status === 429) {
+    // The kit's taxonomy carries no response headers, so the retry hint rides
+    // the repo's own RetryAfterError (see backend-runtime/http) — one named
+    // carrier instead of a header bag on the base class.
     const retryAfter = response.headers.get('Retry-After');
-    const error = new ServiceUnavailableError(message);
-    if (retryAfter) error.headers = { 'Retry-After': retryAfter };
-    return error;
+    return retryAfter
+      ? new RetryAfterError(message, Number.parseInt(retryAfter, 10))
+      : new ServiceUnavailableError(message);
   }
   if (response.status >= 400 && response.status < 500) return new BadRequestError(message);
   return new InternalServerError(message);

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError, NotFoundError } from '@caldav-bridge/backend-errors';
+import { BadRequestError, NotFoundError } from '@rexezuge/errors';
 
 const { applicationSpies, credentialSpies } = vi.hoisted(() => ({
   applicationSpies: {

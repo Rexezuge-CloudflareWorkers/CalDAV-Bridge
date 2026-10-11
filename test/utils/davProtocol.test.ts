@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DavPathUtil,
-  DavRequestParser,
-  DavResponseBuilder,
-  ifMatchMatches,
-  ifNoneMatchMatches,
-} from '@caldav-bridge/backend-services/calendar';
-import { BadRequestError } from '@caldav-bridge/backend-errors';
+import { DavPathUtil, DavRequestParser, DavResponseBuilder, ifMatchMatches, ifNoneMatchMatches } from '@caldav-bridge/backend-services/calendar';
+import { BadRequestError } from '@rexezuge/errors';
 
 describe('DavPathUtil', () => {
   it('parses DAV resource paths', () => {

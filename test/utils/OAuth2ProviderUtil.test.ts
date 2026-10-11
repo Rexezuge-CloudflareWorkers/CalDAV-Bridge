@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PROVIDER_GOOGLE_CALENDAR, PROVIDER_MICROSOFT_OUTLOOK_CALENDAR } from '@caldav-bridge/shared/constants';
-import { BadRequestError } from '@caldav-bridge/backend-errors';
+import { BadRequestError } from '@rexezuge/errors';
 import { OAuth2ProviderUtil } from '@caldav-bridge/provider-clients/oauth2';
 
 describe('OAuth2ProviderUtil', () => {
@@ -67,7 +67,7 @@ describe('OAuth2ProviderUtil', () => {
       codeVerifier: 'verifier',
     }).catch((error: unknown) => error);
     expect(unsupportedError).toBeInstanceOf(BadRequestError);
-    expect((unsupportedError as BadRequestError).getErrorCode()).toBe(400);
+    expect((unsupportedError as BadRequestError).status).toBe(400);
   });
 
   it('exchanges authorization codes with x-www-form-urlencoded PKCE bodies', async () => {
@@ -110,7 +110,7 @@ describe('OAuth2ProviderUtil', () => {
       codeVerifier: 'verifier-value',
     }).catch((error: unknown) => error);
     expect(missingTokenError).toBeInstanceOf(BadRequestError);
-    expect((missingTokenError as BadRequestError).getErrorCode()).toBe(400);
+    expect((missingTokenError as BadRequestError).status).toBe(400);
   });
 
   it('refreshes access tokens and preserves missing replacement refresh tokens', async () => {
@@ -144,7 +144,7 @@ describe('OAuth2ProviderUtil', () => {
       codeVerifier: 'verifier-value',
     }).catch((error: unknown) => error);
     expect(tokenError).toBeInstanceOf(BadRequestError);
-    expect((tokenError as BadRequestError).getErrorCode()).toBe(400);
+    expect((tokenError as BadRequestError).status).toBe(400);
     expect((tokenError as BadRequestError).message).toBe('OAuth2 token request failed: Bad code');
   });
 
@@ -157,7 +157,7 @@ describe('OAuth2ProviderUtil', () => {
       credentials: { clientId: 'client-id', clientSecret: 'client-secret' },
     }).catch((error: unknown) => error);
     expect(incompleteError).toBeInstanceOf(BadRequestError);
-    expect((incompleteError as BadRequestError).getErrorCode()).toBe(400);
+    expect((incompleteError as BadRequestError).status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

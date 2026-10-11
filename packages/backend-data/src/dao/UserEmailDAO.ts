@@ -1,4 +1,4 @@
-import { TimestampUtil } from '@caldav-bridge/shared/utils';
+import { TimestampUtil } from '@rexezuge/shared';
 import type { D1Queryable } from '../utils';
 
 interface UserEmailRow {

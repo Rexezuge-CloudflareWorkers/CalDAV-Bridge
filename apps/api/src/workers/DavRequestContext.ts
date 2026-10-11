@@ -1,5 +1,5 @@
 import { CalendarObjectMappingDAO } from '@caldav-bridge/backend-data/dao';
-import { RequestEntityTooLargeError } from '@caldav-bridge/backend-errors';
+import { PayloadTooLargeError } from '@rexezuge/errors';
 import { CalendarService } from '@caldav-bridge/backend-services/calendar';
 import type { DavPath } from '@caldav-bridge/backend-services/calendar';
 import { DAV_REQUEST_BODY_MAX_BYTES, DAV_RESOURCE_MAX_BYTES } from '@caldav-bridge/shared/constants';
@@ -85,9 +85,9 @@ async function readDavBody(request: Request): Promise<string> {
   if (!DAV_BODY_METHODS.has(request.method)) return '';
   const maxBytes = davBodyLimit(request.method);
   const declaredLength = Number(request.headers.get('Content-Length'));
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw new RequestEntityTooLargeError();
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw new PayloadTooLargeError();
   const body = await request.text();
-  if (new TextEncoder().encode(body).length > maxBytes) throw new RequestEntityTooLargeError();
+  if (new TextEncoder().encode(body).length > maxBytes) throw new PayloadTooLargeError();
   return body;
 }
 

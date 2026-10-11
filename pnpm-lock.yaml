@@ -8,6 +8,18 @@ importers:
 
   .:
     devDependencies:
+      '@rexezuge/d1':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
+        version: link:../../Software-Development-Kit/packages/d1
+      '@rexezuge/errors':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
+        version: link:../../Software-Development-Kit/packages/errors
+      '@rexezuge/runtime':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/runtime
+        version: link:../../Software-Development-Kit/packages/runtime
+      '@rexezuge/shared':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
+        version: link:../../Software-Development-Kit/packages/shared
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2
@@ -83,9 +95,6 @@ importers:
       '@caldav-bridge/backend-data':
         specifier: workspace:*
         version: link:../../packages/backend-data
-      '@caldav-bridge/backend-errors':
-        specifier: workspace:*
-        version: link:../../packages/backend-errors
       '@caldav-bridge/backend-runtime':
         specifier: workspace:*
         version: link:../../packages/backend-runtime
@@ -98,6 +107,18 @@ importers:
       '@caldav-bridge/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@rexezuge/d1':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
+        version: link:../../../../Software-Development-Kit/packages/d1
+      '@rexezuge/errors':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
+        version: link:../../../../Software-Development-Kit/packages/errors
+      '@rexezuge/runtime':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/runtime
+        version: link:../../../../Software-Development-Kit/packages/runtime
+      '@rexezuge/shared':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
+        version: link:../../../../Software-Development-Kit/packages/shared
       hono:
         specifier: ^4.13.13
         version: 4.13.13
@@ -123,6 +144,18 @@ importers:
       '@caldav-bridge/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@rexezuge/d1':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
+        version: link:../../../../Software-Development-Kit/packages/d1
+      '@rexezuge/errors':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
+        version: link:../../../../Software-Development-Kit/packages/errors
+      '@rexezuge/runtime':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/runtime
+        version: link:../../../../Software-Development-Kit/packages/runtime
+      '@rexezuge/shared':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
+        version: link:../../../../Software-Development-Kit/packages/shared
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -179,25 +212,18 @@ importers:
 
   packages/backend-data:
     dependencies:
-      '@caldav-bridge/backend-errors':
-        specifier: workspace:*
-        version: link:../backend-errors
       '@caldav-bridge/shared':
         specifier: workspace:*
         version: link:../shared
-    devDependencies:
-      '@types/node':
-        specifier: 26.6.x
-        version: 26.6.4
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/backend-errors:
-    dependencies:
-      hono:
-        specifier: ^4.13.13
-        version: 4.13.13
+      '@rexezuge/d1':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
+        version: link:../../../../Software-Development-Kit/packages/d1
+      '@rexezuge/errors':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
+        version: link:../../../../Software-Development-Kit/packages/errors
+      '@rexezuge/shared':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
+        version: link:../../../../Software-Development-Kit/packages/shared
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -208,12 +234,15 @@ importers:
 
   packages/backend-runtime:
     dependencies:
-      '@caldav-bridge/backend-errors':
-        specifier: workspace:*
-        version: link:../backend-errors
       '@caldav-bridge/shared':
         specifier: workspace:*
         version: link:../shared
+      '@rexezuge/errors':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
+        version: link:../../../../Software-Development-Kit/packages/errors
+      '@rexezuge/runtime':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/runtime
+        version: link:../../../../Software-Development-Kit/packages/runtime
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -227,9 +256,6 @@ importers:
       '@caldav-bridge/backend-data':
         specifier: workspace:*
         version: link:../backend-data
-      '@caldav-bridge/backend-errors':
-        specifier: workspace:*
-        version: link:../backend-errors
       '@caldav-bridge/backend-runtime':
         specifier: workspace:*
         version: link:../backend-runtime
@@ -239,6 +265,15 @@ importers:
       '@caldav-bridge/shared':
         specifier: workspace:*
         version: link:../shared
+      '@rexezuge/d1':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/d1
+        version: link:../../../../Software-Development-Kit/packages/d1
+      '@rexezuge/errors':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
+        version: link:../../../../Software-Development-Kit/packages/errors
+      '@rexezuge/shared':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
+        version: link:../../../../Software-Development-Kit/packages/shared
       jose:
         specifier: ^6.2.12
         version: 6.2.12
@@ -252,12 +287,15 @@ importers:
 
   packages/provider-clients:
     dependencies:
-      '@caldav-bridge/backend-errors':
+      '@caldav-bridge/backend-runtime':
         specifier: workspace:*
-        version: link:../backend-errors
+        version: link:../backend-runtime
       '@caldav-bridge/shared':
         specifier: workspace:*
         version: link:../shared
+      '@rexezuge/errors':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/errors
+        version: link:../../../../Software-Development-Kit/packages/errors
     devDependencies:
       '@types/node':
         specifier: 26.6.x
@@ -268,6 +306,9 @@ importers:
 
   packages/shared:
     dependencies:
+      '@rexezuge/shared':
+        specifier: link:/home/engineer/workspace/Software-Development-Kit/packages/shared
+        version: link:../../../../Software-Development-Kit/packages/shared
       zod:
         specifier: ^4.6.5
         version: 4.6.5

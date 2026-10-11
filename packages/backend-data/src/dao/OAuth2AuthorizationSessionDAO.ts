@@ -1,5 +1,5 @@
 import type { OAuth2AuthorizationSession, OAuth2AuthorizationSessionInternal } from '@caldav-bridge/shared/model';
-import { TimestampUtil, UUIDUtil } from '@caldav-bridge/shared/utils';
+import { TimestampUtil, UUIDUtil } from '@rexezuge/shared';
 import type { D1Queryable } from '../utils';
 
 class OAuth2AuthorizationSessionDAO {

@@ -1,12 +1,13 @@
 import { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ConnectedApplicationDAO } from '@caldav-bridge/backend-data/dao';
-import { decryptData } from '@caldav-bridge/backend-data/crypto';
-import { TimestampUtil } from '@caldav-bridge/shared/utils';
+import { decryptSecret } from '@rexezuge/d1';
+import { TimestampUtil } from '@rexezuge/shared';
 import { asD1Queryable } from '../helpers/d1';
 import { applyMigrations } from '../helpers/migrations';
 
-const MASTER_KEY = 'test-master-key-value-for-aes-256';
+// The kit's aes-gcm contract: base64 of exactly 32 bytes.
+const MASTER_KEY = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=';
 const USER_ID = 'user-1';
 const OWNER = 'owner@example.com';
 
@@ -67,7 +68,7 @@ describe('ConnectedApplicationDAO', () => {
 
     // The client secret must not be readable in the column.
     expect(row.encrypted_credentials).not.toContain('client-secret');
-    await expect(decryptData(row.encrypted_credentials, row.credentials_iv, MASTER_KEY)).resolves.toContain('client-secret');
+    await expect(decryptSecret({ ciphertext: row.encrypted_credentials, iv: row.credentials_iv }, MASTER_KEY)).resolves.toContain('client-secret');
   });
 
   it('returns the full application with decrypted credentials', async () => {

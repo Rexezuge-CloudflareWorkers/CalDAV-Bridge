@@ -14,8 +14,8 @@ const { daoSpies } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@caldav-bridge/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@caldav-bridge/shared/utils')>()),
+vi.mock('@rexezuge/shared', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@rexezuge/shared')>()),
   TimestampUtil: {
     getCurrentUnixTimestampInSeconds: () => 1_000_000,
   },

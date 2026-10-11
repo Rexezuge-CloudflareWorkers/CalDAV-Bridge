@@ -1,7 +1,7 @@
 import { CalendarObjectMappingDAO } from '@caldav-bridge/backend-data/dao';
 import type { CalendarObjectMapping } from '@caldav-bridge/backend-data/dao';
-import type { D1Queryable } from '@caldav-bridge/backend-data/utils';
-import { ForbiddenError, NotFoundError } from '@caldav-bridge/backend-errors';
+import type { D1Queryable } from '@rexezuge/d1';
+import { ForbiddenError, NotFoundError } from '@rexezuge/errors';
 import { CalendarProviderUtil } from '@caldav-bridge/provider-clients/calendar';
 import type { CalendarEvent, ConnectedApplication, ProviderCalendar } from '@caldav-bridge/shared/model';
 import { OAuth2AccessTokenService } from '../oauth2/OAuth2AccessTokenService';

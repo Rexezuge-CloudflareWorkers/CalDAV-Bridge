@@ -5,7 +5,7 @@ const srcPath = (relative: string): string => fileURLToPath(new URL(relative, im
 const apiSrcPath = srcPath('./apps/api/src');
 const backgroundSrcPath = srcPath('./apps/background/src');
 const backendDataSrcPath = srcPath('./packages/backend-data/src');
-const backendErrorsSrcPath = srcPath('./packages/backend-errors/src');
+
 const backendRuntimeSrcPath = srcPath('./packages/backend-runtime/src');
 const backendServicesSrcPath = srcPath('./packages/backend-services/src');
 const providerClientsSrcPath = srcPath('./packages/provider-clients/src');
@@ -25,7 +25,7 @@ export const sharedResolve = {
   alias: [
     { find: '@caldav-bridge/background', replacement: backgroundSrcPath },
     { find: '@caldav-bridge/backend-data', replacement: backendDataSrcPath },
-    { find: '@caldav-bridge/backend-errors', replacement: backendErrorsSrcPath },
+    
     { find: '@caldav-bridge/backend-runtime', replacement: backendRuntimeSrcPath },
     { find: '@caldav-bridge/backend-services', replacement: backendServicesSrcPath },
     { find: '@caldav-bridge/provider-clients', replacement: providerClientsSrcPath },

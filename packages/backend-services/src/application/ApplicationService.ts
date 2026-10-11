@@ -1,6 +1,6 @@
 import { CalDavCredentialDAO, ConnectedApplicationDAO } from '@caldav-bridge/backend-data/dao';
-import type { D1Queryable } from '@caldav-bridge/backend-data/utils';
-import { BadRequestError, NotFoundError } from '@caldav-bridge/backend-errors';
+import type { D1Queryable } from '@rexezuge/d1';
+import { BadRequestError, NotFoundError } from '@rexezuge/errors';
 import { ConfigurationManager } from '@caldav-bridge/backend-runtime/config';
 import type { ConnectedApplication, ConnectedApplicationMetadata } from '@caldav-bridge/shared/model';
 

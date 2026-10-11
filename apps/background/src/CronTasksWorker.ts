@@ -1,4 +1,4 @@
-import { AbstractDurableObjectWorker } from '@caldav-bridge/backend-runtime/base';
+import { AbstractDurableObjectWorker } from '@rexezuge/runtime';
 import { DatabaseCleanupTask } from '@caldav-bridge/background/scheduled';
 
 const CRON_TASKS_RUN_PATH = '/run';

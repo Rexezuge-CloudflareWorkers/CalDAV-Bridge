@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UnauthorizedError } from '@caldav-bridge/backend-errors';
+import { UnauthorizedError } from '@rexezuge/errors';
 import { EmailValidationUtil } from '@caldav-bridge/backend-services/auth';
 
 describe('EmailValidationUtil', () => {

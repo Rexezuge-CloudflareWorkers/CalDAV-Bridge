@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/d1": "1.2.0",
+    "@rexezuge/d1": "1.5.2",
     "@rexezuge/errors": "1.2.0",
     "@rexezuge/shared": "1.2.0"
   },

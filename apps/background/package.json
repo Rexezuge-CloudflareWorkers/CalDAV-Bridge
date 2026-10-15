@@ -21,7 +21,7 @@
     "@rexezuge/d1": "1.5.2",
     "@rexezuge/errors": "1.5.2",
     "@rexezuge/runtime": "1.2.0",
-    "@rexezuge/shared": "1.2.0"
+    "@rexezuge/shared": "1.5.2"
   },
   "devDependencies": {
     "@types/node": "26.6.x",

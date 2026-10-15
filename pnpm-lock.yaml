@@ -27,8 +27,8 @@ importers:
         specifier: 1.2.0
         version: 1.2.0(eslint@10.12.0(jiti@2.7.0))(jsonc-parser@3.3.1)(prettier@3.9.10)(typescript-eslint@8.71.1(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3))(typescript@6.0.3)(vitest@4.1.11)
       '@rexezuge/web':
-        specifier: 1.2.0
-        version: 1.2.0(lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 1.5.2
+        version: 1.5.2(lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2
@@ -179,8 +179,8 @@ importers:
   apps/web:
     dependencies:
       '@rexezuge/web':
-        specifier: 1.2.0
-        version: 1.2.0(lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 1.5.2
+        version: 1.5.2(lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -922,8 +922,8 @@ packages:
       typescript-eslint: ^8.0.0
       vitest: ^4.0.0
 
-  '@rexezuge/web@1.2.0':
-    resolution: {integrity: sha512-CxWCXhjAMeEk9NiZf5QlfP/g/B8AeJzLDOL3U6dFWGIblL/TC9Y8EGqLVzR9Ob1pVRGtYTweRFZSUywC5Gh/PQ==}
+  '@rexezuge/web@1.5.2':
+    resolution: {integrity: sha512-70k1Bia0WZ9ZMSXiGkBtbr063nrQHari/mYgODZMuxw3cknQhxeRVB+1LhubcgbeyZpGeccIqpJHHL/G56MhYw==}
     peerDependencies:
       lucide-react: ^1.49.0
       react: ^19.3.0
@@ -2860,10 +2860,10 @@ snapshots:
       typescript-eslint: 8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3)
       vitest: 4.1.11(@types/node@26.6.5)(@vitest/coverage-v8@4.1.11)(happy-dom@21.0.1)(vite@8.3.2(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
 
-  '@rexezuge/web@1.2.0(lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@rexezuge/web@1.5.2(lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@rexezuge/errors': 1.2.0
-      '@rexezuge/shared': 1.2.0
+      '@rexezuge/errors': 1.5.2
+      '@rexezuge/shared': 1.5.2
       lucide-react: 1.52.0(@types/react@19.3.0)(react@19.3.0)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)

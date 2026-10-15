@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@rexezuge/d1':
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.5.2
+        version: 1.5.2
       '@rexezuge/errors':
         specifier: 1.2.0
         version: 1.2.0
@@ -117,8 +117,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@rexezuge/d1':
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.5.2
+        version: 1.5.2
       '@rexezuge/errors':
         specifier: 1.2.0
         version: 1.2.0
@@ -157,8 +157,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@rexezuge/d1':
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.5.2
+        version: 1.5.2
       '@rexezuge/errors':
         specifier: 1.2.0
         version: 1.2.0
@@ -231,8 +231,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/d1':
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.5.2
+        version: 1.5.2
       '@rexezuge/errors':
         specifier: 1.2.0
         version: 1.2.0
@@ -281,8 +281,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/d1':
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.5.2
+        version: 1.5.2
       '@rexezuge/errors':
         specifier: 1.2.0
         version: 1.2.0
@@ -1047,8 +1047,14 @@ packages:
   '@rexezuge/d1@1.2.0':
     resolution: {integrity: sha512-3E7fPSiUkkVhaBb2+xcQKD/f/c3DeBwVvw7bNVUH6DyGABLAyKYY1+8XwQC5tGbkHNhyzSCigcDu4ZspM0bJNw==}
 
+  '@rexezuge/d1@1.5.2':
+    resolution: {integrity: sha512-Fo112gWa1GOF1IepnxvszJUk/uITu1Zpub2aqIczxUnTHCeibfqYC7lWv4P/rFoInMo5OWez+AIzQ2D5dBVtXQ==}
+
   '@rexezuge/errors@1.2.0':
     resolution: {integrity: sha512-9dhTdr79H8nZmAZBBvnhKEAScT8oF1Uirir1zQ2cU1WxPjHyF3YidvFPhz00ADRcRQf4vVbR0QPgR6ZfY+malQ==}
+
+  '@rexezuge/errors@1.5.2':
+    resolution: {integrity: sha512-Wf0OLpw+TFP0CFFXJpvgq0Kb/GP/8lCWdQetUS+Rg48FX5p6Kunaj8ZyxG2QtrJINvY5d8RxaVXa1FA+8KQugg==}
 
   '@rexezuge/http@1.2.0':
     resolution: {integrity: sha512-6yHtxtvXUxbfFU8wdnPYrRoh/z6uMbaPyPycWQm3fcDm73MVNCN27fwmMMDV99Sr3ihNtkOlP+mzzAHcjWdBEw==}
@@ -1058,6 +1064,9 @@ packages:
 
   '@rexezuge/shared@1.2.0':
     resolution: {integrity: sha512-lHWZt6eYXrR9D5QYbj4reYWUhqk07LkXq9YTfOgOQWizsEfLTokDdR3o83HU6DOLMFhBwy4UUxNx312845L2jA==}
+
+  '@rexezuge/shared@1.5.2':
+    resolution: {integrity: sha512-TxpfjqrVBrEvDphLraKM9OIi0IuWukgSOQKrenb46Bfo5eVTm5cdYklW+a/Ud8aX+cyMPPxqqxVuR0z8X3QKCQ==}
 
   '@rexezuge/tooling@1.2.0':
     resolution: {integrity: sha512-e58Z7Fj+//jxnY73PhQY0XQ/OaQU+bINOEWo5ouA01diaaKRp0voa9+KzucmYJ2orEz73BTLhNYrZDb+Xh9V7w==}
@@ -3047,7 +3056,14 @@ snapshots:
       '@rexezuge/errors': 1.2.0
       '@rexezuge/shared': 1.2.0
 
+  '@rexezuge/d1@1.5.2':
+    dependencies:
+      '@rexezuge/errors': 1.5.2
+      '@rexezuge/shared': 1.5.2
+
   '@rexezuge/errors@1.2.0': {}
+
+  '@rexezuge/errors@1.5.2': {}
 
   '@rexezuge/http@1.2.0':
     dependencies:
@@ -3060,6 +3076,8 @@ snapshots:
   '@rexezuge/runtime@1.2.0': {}
 
   '@rexezuge/shared@1.2.0': {}
+
+  '@rexezuge/shared@1.5.2': {}
 
   '@rexezuge/tooling@1.2.0(eslint@10.12.0(jiti@2.7.0))(jsonc-parser@3.3.1)(prettier@3.9.10)(typescript-eslint@8.71.1(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3))(typescript@6.0.3)(vitest@4.1.11)':
     dependencies:

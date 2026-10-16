@@ -34,9 +34,54 @@ function weakEtag(value: string): string {
  * `split(',')` is wrong: an entity tag may contain a comma (`W/"a,b"`), so a
  * naive split yields fragments that match nothing. Each element is either a
  * quoted string or `*`, and the quote is what delimits it.
+ *
+ * The list is scanned rather than matched, because the header is attacker-
+ * shaped input evaluated exactly at a conditional write: as a pattern, the
+ * quote/escape grammar made an unterminated tag (`"` followed by `\"` repeats)
+ * cost quadratic backtracking. A backslash escapes the next character -- the
+ * pattern treated one before a line terminator as ordinary text instead, which
+ * only matters for characters a header value cannot carry (raw CR/LF) or for
+ * the caller's own precondition (the exotic separators). Once an opening quote
+ * has no unescaped closing quote, no later quoted token can close either, so
+ * only bare `*` tokens remain to be found and the scan stays linear. A `W/`
+ * prefix is part of the tag so the strong and weak comparisons can still tell
+ * it apart.
  */
 function parseEtagList(condition: string): string[] {
-  return (condition.match(/(?:W\/)?"(?:[^"\\]|\\.)*"|\*/g) ?? []).map((item) => item.trim()).filter(Boolean);
+  const tags: string[] = [];
+  let quotedTokensPossible = true;
+  let index = 0;
+  while (index < condition.length) {
+    const char = condition[index];
+    if (char === '*') {
+      tags.push('*');
+      index += 1;
+      continue;
+    }
+    if (char !== '"' || !quotedTokensPossible) {
+      index += 1;
+      continue;
+    }
+    let end = index + 1;
+    while (end < condition.length) {
+      if (condition[end] === '\\') {
+        end += 2;
+        continue;
+      }
+      if (condition[end] === '"') break;
+      end += 1;
+    }
+    if (end >= condition.length) {
+      // No unescaped closing quote remains, so no later quoted token can close either.
+      quotedTokensPossible = false;
+      index += 1;
+      continue;
+    }
+    const quoteStart = condition[index - 1] === '/' && condition[index - 2] === 'W' ? index - 2 : index;
+    tags.push(condition.slice(quoteStart, end + 1));
+    index = end + 1;
+  }
+  return tags;
 }
 
 /**

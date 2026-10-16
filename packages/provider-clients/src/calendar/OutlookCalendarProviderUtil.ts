@@ -204,26 +204,90 @@ class OutlookCalendarProviderUtil {
     if (depth > 4 || !/converted from text|\bPlainText\b/i.test(content)) return undefined;
     const plainText = OutlookCalendarProviderUtil.extractPlainTextDiv(content);
     if (plainText === undefined) return undefined;
-    const decoded = OutlookCalendarProviderUtil.decodeHtmlEntities(
-      plainText
-        .replace(/<br\s*\/?\s*>/gi, '\n')
-        .replace(/<\/(?:div|p)>/gi, '\n')
-        .replace(/<[^>]+>/g, ''),
-    )
+    const decoded = OutlookCalendarProviderUtil.decodeHtmlEntities(OutlookCalendarProviderUtil.stripExchangeHtml(plainText))
       .replace(/\r\n?/g, '\n')
       .trim();
     return OutlookCalendarProviderUtil.unwrapExchangePlainTextHtml(decoded, depth + 1) ?? decoded.replace(/[<>]/g, '');
   }
 
+  /**
+   * Reduce an Exchange HTML fragment to text.
+   *
+   * `<br>` variants and closing block tags become line breaks and every other
+   * tag is dropped -- the same output the successive `String.replace` passes
+   * produced, as a single left-to-right scan. The replace chain was vulnerable
+   * twice over: `\s*\/?\s*` partitioned whitespace quadratically when `<br`
+   * was followed by a long non-`>` run, and removing a multi-character tag in
+   * one pass can re-form one across the seam (`</d</div>iv>`). The body comes
+   * from whoever put the event on the connected calendar, so it must stay
+   * linear and unambiguous.
+   */
+  private static stripExchangeHtml(value: string): string {
+    let text = '';
+    let index = 0;
+    while (index < value.length) {
+      const open = value.indexOf('<', index);
+      if (open === -1) {
+        text += value.slice(index);
+        break;
+      }
+      text += value.slice(index, open);
+      const close = value.indexOf('>', open + 1);
+      if (close === -1) {
+        // No later `<` can be closed either, so the remainder is literal text.
+        text += value.slice(open);
+        break;
+      }
+      const tag = value.slice(open + 1, close).toLowerCase();
+      if (tag === '') text += '<>';
+      else if (tag === '/div' || tag === '/p' || OutlookCalendarProviderUtil.isLineBreakTag(tag)) text += '\n';
+      index = close + 1;
+    }
+    return text;
+  }
+
+  /** `<br>`, `<br/>` and `<br />`, with whitespace only around the slash. */
+  private static isLineBreakTag(tag: string): boolean {
+    if (!tag.startsWith('br')) return false;
+    const tail = tag.slice(2).trim();
+    return tail === '' || tail === '/';
+  }
+
+  /**
+   * The body of the first `<div>` whose opening tag carries the Exchange
+   * `PlainText` marker.
+   *
+   * Written as an index walk rather than one pattern: "attributes contain
+   * `PlainText`, body runs to the next `</div>`" makes the engine rescan the
+   * tail once per `<div` in a body that arrives from the invitation sender.
+   * The walk visits each character once, and an opening tag with no closing
+   * `</div>` after it ends the search because no later candidate could close
+   * either.
+   */
   private static extractPlainTextDiv(content: string): string | undefined {
-    return /<div\b(?=[^>]*\bPlainText\b)[^>]*>([\s\S]*?)<\/div>/i.exec(content)?.[1];
+    const openTag = /<div\b[^<>]*>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = openTag.exec(content))) {
+      if (!/\bPlainText\b/i.test(match[0])) continue;
+      const bodyStart = match.index + match[0].length;
+      const closeTag = /<\/div>/gi;
+      closeTag.lastIndex = bodyStart;
+      const close = closeTag.exec(content);
+      return close ? content.slice(bodyStart, close.index) : undefined;
+    }
+    return undefined;
   }
 
   private static decodeHtmlEntities(value: string): string {
     const namedEntities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
     return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, name: string) => {
-      if (name.startsWith('#x')) return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
-      if (name.startsWith('#')) return String.fromCodePoint(Number.parseInt(name.slice(1), 10));
+      if (name.startsWith('#')) {
+        // `#x`/`#X` are hexadecimal; the rest is decimal. Out-of-range code points
+        // must not throw out of `String.fromCodePoint` and fail the whole listing.
+        const hexadecimal = name[1] === 'x' || name[1] === 'X';
+        const codePoint = Number.parseInt(name.slice(hexadecimal ? 2 : 1), hexadecimal ? 16 : 10);
+        return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : entity;
+      }
       return namedEntities[name.toLowerCase()] ?? entity;
     });
   }

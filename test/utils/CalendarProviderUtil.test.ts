@@ -216,6 +216,131 @@ describe('CalendarProviderUtil', () => {
     expect(events[0]?.description).toBe('Close Helium Mobile');
   });
 
+  it('converts Exchange line-break and closing block tags to newlines', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        value: [
+          {
+            id: 'event-id',
+            subject: 'Subject',
+            body: {
+              contentType: 'html',
+              content:
+                '<!-- converted from text --><div class="PlainText">Line one<br>Line two<br/>Line three<br />Line four<BR>Line five</div>',
+            },
+            start: { dateTime: '2026-05-04T10:00:00.0000000', timeZone: 'UTC' },
+            end: { dateTime: '2026-05-04T10:30:00.0000000', timeZone: 'UTC' },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
+
+    expect(events[0]?.description).toBe('Line one\nLine two\nLine three\nLine four\nLine five');
+  });
+
+  it('drops tags that carry no line break, including a <br> with attributes', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        value: [
+          {
+            id: 'event-id',
+            subject: 'Subject',
+            body: { contentType: 'html', content: '<div class="PlainText">Alpha</p>Beta<b>bold</b><br class="x">tail</div>' },
+            start: { dateTime: '2026-05-04T10:00:00.0000000', timeZone: 'UTC' },
+            end: { dateTime: '2026-05-04T10:30:00.0000000', timeZone: 'UTC' },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
+
+    // `</p>` becomes a newline, `Beta<b>bold</b>` loses its tags, and only the
+    // bare `<br>` spellings are line breaks -- `<br class="x">` is just stripped.
+    expect(events[0]?.description).toBe('Alpha\nBetaboldtail');
+  });
+
+  it('keeps out-of-range entities as text and still decodes valid ones', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        value: [
+          {
+            id: 'event-id',
+            subject: 'Subject',
+            body: {
+              contentType: 'html',
+              content: '<div class="PlainText">Emoji &#x1f600; ok, invalid &#x110000; and &#X110000; kept</div>',
+            },
+            start: { dateTime: '2026-05-04T10:00:00.0000000', timeZone: 'UTC' },
+            end: { dateTime: '2026-05-04T10:30:00.0000000', timeZone: 'UTC' },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
+
+    // `String.fromCodePoint` throws outside the Unicode range; a crafted entity
+    // reaching it would fail the whole listing.
+    expect(events[0]?.description).toBe('Emoji \u{1f600} ok, invalid &#x110000; and &#X110000; kept');
+  });
+
+  // The `<br` line-break pattern used to re-partition whitespace quadratically
+  // when no `>` followed, and the `<div`-marker pattern rescanned the tail once
+  // per opener. The bodies come from whoever sent the invitation, so both stay
+  // linear now; the Vitest timeout is the regression guard.
+  it('strips a pathological <br whitespace run without backtracking blowup', async () => {
+    const payload = '<br' + ' '.repeat(100_000) + 'x';
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        value: [
+          {
+            id: 'event-id',
+            subject: 'Subject',
+            body: { contentType: 'html', content: `<!-- converted from text --><div class="PlainText">${payload}</div>` },
+            start: { dateTime: '2026-05-04T10:00:00.0000000', timeZone: 'UTC' },
+            end: { dateTime: '2026-05-04T10:30:00.0000000', timeZone: 'UTC' },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
+
+    // The payload has no `>`, so nothing is a tag; the trailing fallback drops
+    // the stray angle brackets.
+    expect(events[0]?.description).toBe('br' + ' '.repeat(100_000) + 'x');
+  });
+
+  it('answers a body that opens many <div tags without one closing', async () => {
+    const content = '<!-- converted from text -->' + '<div'.repeat(50_000);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        value: [
+          {
+            id: 'event-id',
+            subject: 'Subject',
+            body: { contentType: 'html', content },
+            start: { dateTime: '2026-05-04T10:00:00.0000000', timeZone: 'UTC' },
+            end: { dateTime: '2026-05-04T10:30:00.0000000', timeZone: 'UTC' },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await CalendarProviderUtil.listEvents(PROVIDER_MICROSOFT_OUTLOOK_CALENDAR, 'token', 'calendar-id');
+
+    // No marker div is extractable, so the raw body is kept as the description.
+    expect(events[0]?.description).toBe(content);
+  });
+
   it('maps Microsoft weekly recurrence to iCalendar RRULE', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
       jsonResponse({

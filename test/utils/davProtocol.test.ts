@@ -464,4 +464,27 @@ describe('conditional etag matching', () => {
     // Weak comparison ignores the prefix, so this one does match.
     expect(ifNoneMatchMatches('W/"a,b"', 'a,b')).toBe(true);
   });
+
+  it('treats an escaped quote as tag content rather than a delimiter', () => {
+    expect(ifMatchMatches('"a\\"b"', '"a\\"b"')).toBe(true);
+    expect(ifMatchMatches('"a\\"b", "c"', '"c"')).toBe(true);
+    expect(ifMatchMatches('"a\\"b", "c"', '"a\\"b"')).toBe(true);
+    // The escaped quote must not end the tag early, or `"b"` would satisfy it.
+    expect(ifMatchMatches('"a\\"b"', '"b"')).toBe(false);
+  });
+
+  it('treats an unterminated tag as matching nothing', () => {
+    expect(ifMatchMatches('"unterminated', '"unterminated"')).toBe(false);
+    expect(ifNoneMatchMatches('"unterminated', 'unterminated')).toBe(false);
+  });
+
+  // The tag list used to be parsed with a backtracking pattern whose pair
+  // boundaries made an unterminated `\"` repeat quadratic -- a 100k-pair
+  // If-Match header kept the request busy for tens of seconds. The scan is
+  // linear, so the Vitest timeout is the regression guard.
+  it('answers a large unterminated escaped-quote list without pathological backtracking', () => {
+    const adversarial = '"' + '\\"'.repeat(100_000);
+    expect(ifMatchMatches(adversarial, 'etag-1')).toBe(false);
+    expect(ifNoneMatchMatches(adversarial, 'etag-1')).toBe(false);
+  });
 });

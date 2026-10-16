@@ -12,7 +12,7 @@ import { CalendarService, DavPathUtil, DavRequestParser, DavResponseBuilder, ICa
 import { CredentialService } from '@caldav-bridge/backend-services/credential';
 import { OAuth2AuthorizationService } from '@caldav-bridge/backend-services/oauth2';
 import { UserService } from '@caldav-bridge/backend-services/user';
-import type { UserIdentity } from '@caldav-bridge/backend-services/user';
+import type { ResolvedAccount } from '@rexezuge/identity';
 import { BaseUrlUtil, CalDavCredentialUtil } from '@caldav-bridge/shared';
 import { DAV_MULTIGET_MAX_HREFS } from '@caldav-bridge/shared/constants';
 import { validateRequestInput } from '@caldav-bridge/shared/schema';
@@ -23,7 +23,7 @@ import { DavRequestContext, readDavBody } from './DavRequestContext';
 import { SPA_HTML } from '@/generated/spa-shell';
 
 type AppBindings = Env;
-type AppVariables = { AuthenticatedUser: UserIdentity };
+type AppVariables = { AuthenticatedUser: ResolvedAccount };
 
 const D1_BOOKMARK_HEADER: string = 'x-d1-bookmark';
 
@@ -40,24 +40,24 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
     app.use('/user/*', MiddlewareHandlers.userAuthentication());
 
     app.get('/user/me', async (c) => safe(() => this.getCurrentUser(c.get('AuthenticatedUser'), c.env)));
-    app.get('/user/applications', async (c) => safe(() => this.listApplications(c.get('AuthenticatedUser').userId, c.req.raw, c.env)));
-    app.post('/user/application', async (c) => safe(() => this.createApplication(c.get('AuthenticatedUser').userId, c.req.raw, c.env)));
-    app.put('/user/application', async (c) => safe(() => this.updateApplication(c.get('AuthenticatedUser').userId, c.req.raw, c.env)));
-    app.delete('/user/application', async (c) => safe(() => this.deleteApplication(c.get('AuthenticatedUser').userId, c.req.raw, c.env)));
+    app.get('/user/applications', async (c) => safe(() => this.listApplications(c.get('AuthenticatedUser').id, c.req.raw, c.env)));
+    app.post('/user/application', async (c) => safe(() => this.createApplication(c.get('AuthenticatedUser').id, c.req.raw, c.env)));
+    app.put('/user/application', async (c) => safe(() => this.updateApplication(c.get('AuthenticatedUser').id, c.req.raw, c.env)));
+    app.delete('/user/application', async (c) => safe(() => this.deleteApplication(c.get('AuthenticatedUser').id, c.req.raw, c.env)));
     app.post('/user/application/oauth2/authorize', async (c) =>
-      safe(() => this.createOAuth2Authorization(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
+      safe(() => this.createOAuth2Authorization(c.get('AuthenticatedUser').id, c.req.raw, c.env)),
     );
     app.get('/user/application/calendars', async (c) =>
-      safe(() => this.listCalendars(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
+      safe(() => this.listCalendars(c.get('AuthenticatedUser').id, c.req.raw, c.env)),
     );
     app.get('/user/application/caldav-credentials', async (c) =>
-      safe(() => this.listCalDavCredentials(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
+      safe(() => this.listCalDavCredentials(c.get('AuthenticatedUser').id, c.req.raw, c.env)),
     );
     app.post('/user/application/caldav-credential', async (c) =>
-      safe(() => this.createCalDavCredential(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
+      safe(() => this.createCalDavCredential(c.get('AuthenticatedUser').id, c.req.raw, c.env)),
     );
     app.delete('/user/application/caldav-credential', async (c) =>
-      safe(() => this.deleteCalDavCredential(c.get('AuthenticatedUser').userId, c.req.raw, c.env)),
+      safe(() => this.deleteCalDavCredential(c.get('AuthenticatedUser').id, c.req.raw, c.env)),
     );
     app.get('/api/oauth2/callback/:applicationId', async (c) =>
       safe(() => this.oauth2Callback(c.req.raw, c.env, c.req.param('applicationId'))),
@@ -115,8 +115,8 @@ class CalDavBridgeWorker extends AbstractEntrypointWorker {
    * address that has since been changed shows up here immediately instead of
    * echoing the address the caller happens to present.
    */
-  private async getCurrentUser(identity: UserIdentity, env: Env): Promise<Response> {
-    return jsonResponse(await new UserService(env).getCurrentUser(identity));
+  private async getCurrentUser(account: ResolvedAccount, env: Env): Promise<Response> {
+    return jsonResponse(await new UserService(env).getCurrentUser(account));
   }
 
   private async listApplications(userId: string, request: Request, env: Env): Promise<Response> {

@@ -1,51 +1,78 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { UserIdentityService } from '@caldav-bridge/backend-services/user';
-
-const { resolveOrCreate } = vi.hoisted(() => ({
-  resolveOrCreate: vi.fn(),
+const { resolveOrRegister, touch } = vi.hoisted(() => ({
+  resolveOrRegister: vi.fn(),
+  touch: vi.fn(),
 }));
 
-// The DAO layer is exercised against a real SQLite engine in `test/dao`, so here
-// only the service's own contract is under test.
-vi.spyOn(UserIdentityService.prototype, 'resolveOrCreate').mockImplementation(resolveOrCreate);
+// What is under test here is the wiring: the kit's resolver plus the repo's
+// heartbeat. The resolution itself is covered against a real schema in
+// `test/services/UserIdentity.test.ts`, and the heartbeat in
+// `test/dao/UserDAO.test.ts`.
+vi.mock('@rexezuge/identity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@rexezuge/identity')>()),
+  UserIdentityService: class {
+    public resolveOrRegister = resolveOrRegister;
+  },
+}));
 
-const IDENTITY = {
-  userId: '11111111-1111-4111-8111-111111111111',
-  currentEmail: 'user@example.test',
-  anchorEmail: 'user@example.test',
-};
+vi.mock('@caldav-bridge/backend-data/dao', () => ({
+  UserDAO: class {
+    public touch = touch;
+  },
+}));
 
 import { UserService } from '@caldav-bridge/backend-services/user';
+
+const ACCOUNT = {
+  id: 'usr_11111111111141118111111111111111',
+  email: 'user@example.test',
+  anchorEmail: 'user@example.test',
+  username: null,
+};
 
 describe('UserService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resolveOrCreate.mockResolvedValue(IDENTITY);
+    resolveOrRegister.mockResolvedValue(ACCOUNT);
   });
 
   it('returns the resolved account so callers can authorize against an id', async () => {
-    const identity = await new UserService({ DB: {} } as never).upsertUser('user@example.test');
+    const account = await new UserService({ DB: {} } as never).upsertUser('user@example.test');
 
-    expect(resolveOrCreate).toHaveBeenCalledWith('user@example.test');
+    expect(resolveOrRegister).toHaveBeenCalledWith('user@example.test');
     // The account id is what everything downstream keys on; returning it is what
     // lets an address change keep working.
-    expect(identity).toEqual(IDENTITY);
+    expect(account).toEqual(ACCOUNT);
+  });
+
+  it('heartbeats the account, so the retention sweep can see it is alive', async () => {
+    await new UserService({ DB: {} } as never).upsertUser('user@example.test');
+
+    expect(touch).toHaveBeenCalledWith(ACCOUNT.id);
+  });
+
+  it('fails loudly when the address cannot be resolved to an account', async () => {
+    resolveOrRegister.mockResolvedValue(null);
+
+    // A registry row that points at a missing account resolves to nothing;
+    // answering with an identity that owns nothing would look like a
+    // successful sign-in that never works.
+    await expect(new UserService({ DB: {} } as never).upsertUser('user@example.test')).rejects.toThrow(/Failed to provision/);
   });
 
   it("reports the account's current address rather than the one presented", async () => {
-    resolveOrCreate.mockResolvedValue({ ...IDENTITY, currentEmail: 'moved@example.test' });
-
     const user = await new UserService({ DB: {} } as never).getCurrentUser({
-      userId: IDENTITY.userId,
-      currentEmail: 'moved@example.test',
-      anchorEmail: 'user@example.test',
+      ...ACCOUNT,
+      email: 'moved@example.test',
     });
 
-    expect(user.userId).toBe(IDENTITY.userId);
+    expect(user.userId).toBe(ACCOUNT.id);
     expect(user.email).toBe('moved@example.test');
-    // The frozen anchor is an implementation detail and is not exposed.
+    // The frozen anchor and the handle are implementation details and are not
+    // exposed.
     expect(user).not.toHaveProperty('anchorEmail');
+    expect(user).not.toHaveProperty('username');
   });
 
   it('reports configured limits with package defaults', async () => {

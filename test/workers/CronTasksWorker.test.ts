@@ -53,6 +53,36 @@ describe('CronTasksWorker', () => {
     await expect(firstResponse).resolves.toHaveProperty('status', 200);
   });
 
+  it('runs with defaults when the run body is missing or unreadable', async () => {
+    const worker = new CronTasksWorker(fakeDurableObjectState(), {} as Env);
+
+    // The scheduled handler always sends a JSON body, but a torn or absent one
+    // must not stop the cleanup: the run matters more than its metadata.
+    const response = await worker.fetch(new Request('https://cron-tasks.internal/run', { method: 'POST' }));
+
+    expect(response.status).toBe(200);
+    const scheduledEvent = databaseCleanupHandle.mock.calls[0][0] as ScheduledController;
+    expect(scheduledEvent.cron).toBe('');
+    expect(typeof scheduledEvent.scheduledTime).toBe('number');
+    // The controller the task receives implements the platform contract, so a
+    // task that asks the platform not to retry can be honoured.
+    expect(() => scheduledEvent.noRetry()).not.toThrow();
+  });
+
+  it('reports a failed run rather than a completed one', async () => {
+    // The kit's scheduled task rethrows a failure, so it reaches this worker's
+    // catch: a cleanup that could not run is never reported as completed.
+    databaseCleanupHandle.mockRejectedValue(new Error('D1 unavailable'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const worker = new CronTasksWorker(fakeDurableObjectState(), {} as Env);
+
+    const response = await worker.fetch(runRequest());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ status: 'failed' });
+    consoleError.mockRestore();
+  });
+
   it('rejects unsupported routes and methods', async () => {
     const worker = new CronTasksWorker(fakeDurableObjectState(), {} as Env);
 

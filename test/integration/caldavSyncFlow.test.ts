@@ -276,7 +276,7 @@ async function seedAccount(database: DatabaseSync): Promise<void> {
   // credentials to reach the provider, so a placeholder would not get this far.
   const encrypted = await encryptSecret(JSON.stringify(CREDENTIALS), MASTER_KEY);
   database
-    .prepare('INSERT INTO users (email, created_at, updated_at, user_id, current_email) VALUES (?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO users (email, created_at, updated_at, id, current_email) VALUES (?, ?, ?, ?, ?)')
     .run('owner@example.com', 100, 100, 'user-1', 'owner@example.com');
   database
     .prepare('INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (?, ?, 1, ?)')

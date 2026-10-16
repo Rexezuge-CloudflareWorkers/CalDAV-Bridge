@@ -25,13 +25,13 @@
  *
  * Usage:
  *   pnpm exec tsx scripts/change-email.ts --db caldav-bridge-db --account alice@example.com --to new@example.com
- *   pnpm exec tsx scripts/change-email.ts --db caldav-bridge-db --id <user-uuid> --to new@example.com --dry-run
+ *   pnpm exec tsx scripts/change-email.ts --db caldav-bridge-db --id <account-id> --to new@example.com --dry-run
  *   pnpm exec tsx scripts/change-email.ts --db caldav-bridge-db --audit
  *
  * Flags:
  *   --db <name|binding>  required; D1 database name or binding
  *   --account <email>    match the current sign-in address
- *   --id <user-uuid>     match the stable account id (alternative to --account)
+ *   --id <account-id>    match the stable account id (alternative to --account)
  *   --to <email>         the new sign-in address
  *   --audit              report addresses and duplicate anchors; changes nothing
  *   --config <path>      wrangler config (default ./wrangler.jsonc)
@@ -53,19 +53,19 @@ interface Args {
 }
 
 interface AccountRow {
-  user_id: string;
+  id: string;
   anchor: string;
   current_email: string | null;
 }
 
 const USAGE = `Usage:
-  pnpm exec tsx scripts/change-email.ts --db <name> (--account <email> | --id <user-uuid>) --to <new-email> [--remote] [--dry-run]
+  pnpm exec tsx scripts/change-email.ts --db <name> (--account <email> | --id <account-id>) --to <new-email> [--remote] [--dry-run]
   pnpm exec tsx scripts/change-email.ts --db <name> --audit
 
 Flags:
   --db <name>       D1 database name or binding (required)
   --account <email> the current sign-in address
-  --id <user-uuid>  the stable account id
+  --id <account-id> the stable account id
   --to <email>      the new sign-in address
   --audit           report addresses and duplicate anchors, changing nothing
   --config <path>   wrangler config (default ./wrangler.jsonc)
@@ -196,17 +196,17 @@ function audit(args: Args): void {
 
   const accounts = d1(
     args,
-    `SELECT u.user_id, u.email AS anchor, u.current_email,
+    `SELECT u.id, u.email AS anchor, u.current_email,
             (SELECT group_concat(e.email || CASE WHEN e.is_verified = 1 THEN ' (live)' ELSE ' (revoked)' END, ' ')
-             FROM user_emails e WHERE e.user_id = u.user_id) AS registry,
-            (SELECT COUNT(*) FROM connected_applications c WHERE c.user_id = u.user_id) AS applications
+             FROM user_emails e WHERE e.user_id = u.id) AS registry,
+            (SELECT COUNT(*) FROM connected_applications c WHERE c.user_id = u.id) AS applications
      FROM users u ORDER BY u.created_at LIMIT 200`,
   ).results;
 
   process.stdout.write(`\naccounts (${accounts?.length ?? 0}):\n`);
   for (const row of accounts ?? []) {
     process.stdout.write(
-      `  ${String(row['user_id'])}  ${String(row['current_email'] ?? '-')}  apps=${String(row['applications'])}  ` +
+      `  ${String(row['id'])}  ${String(row['current_email'] ?? '-')}  apps=${String(row['applications'])}  ` +
         `anchor=${String(row['anchor'])}  registry=${String(row['registry'] ?? '-')}\n`,
     );
   }
@@ -238,12 +238,12 @@ function main(): void {
 
   const target = sqlEmail(args.to);
   const selector = args.id
-    ? { sql: `user_id = ${sqlToken(args.id, 'account id')}`, label: `id ${args.id}` }
+    ? { sql: `id = ${sqlToken(args.id, 'account id')}`, label: `id ${args.id}` }
     : { sql: `current_email = ${sqlEmail(args.account as string)}`, label: `account ${args.account}` };
 
-  const found = d1(args, `SELECT user_id, email AS anchor, current_email FROM users WHERE ${selector.sql} LIMIT 1`);
+  const found = d1(args, `SELECT id, email AS anchor, current_email FROM users WHERE ${selector.sql} LIMIT 1`);
   const account = (found.results ?? [])[0] as AccountRow | undefined;
-  if (!account?.user_id) {
+  if (!account?.id) {
     die(
       `no account matched ${selector.label}. Match on the current sign-in address or the user id -- ` +
         'the frozen anchor is not searchable, because it may not be the sign-in address.',
@@ -253,11 +253,11 @@ function main(): void {
   const holder = d1(
     args,
     `SELECT ue.user_id, ue.is_verified, u.current_email
-     FROM user_emails ue JOIN users u ON u.user_id = ue.user_id
+     FROM user_emails ue JOIN users u ON u.id = ue.user_id
      WHERE ue.email = ${target} LIMIT 1`,
   );
   const existing = (holder.results ?? [])[0] as { user_id: string; is_verified: number; current_email: string | null } | undefined;
-  if (existing && existing.is_verified === 1 && existing.user_id !== account.user_id) {
+  if (existing && existing.is_verified === 1 && existing.user_id !== account.id) {
     die(
       `${args.to} is already a live login for account ${existing.user_id} (current_email ${existing.current_email ?? '?'}). ` +
         'Re-pointing it would hand that account to this user. Resolve the conflict first.',
@@ -266,16 +266,16 @@ function main(): void {
 
   const current = account.current_email ?? account.anchor;
   const now = Math.floor(Date.now() / 1000);
-  const userId = sqlToken(account.user_id, 'account id');
+  const userId = sqlToken(account.id, 'account id');
   const statements = [
     `INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (${target}, ${userId}, 1, ${now}) ON CONFLICT(email) DO UPDATE SET user_id = excluded.user_id, is_verified = excluded.is_verified;`,
-    `UPDATE users SET current_email = ${target}, updated_at = ${now} WHERE user_id = ${userId};`,
+    `UPDATE users SET current_email = ${target}, updated_at = ${now} WHERE id = ${userId};`,
     `UPDATE user_emails SET is_verified = 0 WHERE user_id = ${userId} AND email != ${target};`,
   ];
 
   process.stdout.write(
     [
-      `account   ${account.user_id}`,
+      `account   ${account.id}`,
       `anchor    ${account.anchor}  (frozen -- never updated)`,
       `from      ${current}`,
       `to        ${args.to?.toLowerCase()}`,
@@ -299,8 +299,8 @@ function main(): void {
   const after = d1(
     args,
     `SELECT u.email AS anchor, u.current_email,
-            (SELECT group_concat(e.email || ':' || e.is_verified, ' ') FROM user_emails e WHERE e.user_id = u.user_id) AS registry
-     FROM users u WHERE u.user_id = ${userId}`,
+            (SELECT group_concat(e.email || ':' || e.is_verified, ' ') FROM user_emails e WHERE e.user_id = u.id) AS registry
+     FROM users u WHERE u.id = ${userId}`,
   );
   const row = (after.results ?? [])[0] as { anchor: string; current_email: string; registry: string } | undefined;
   process.stdout.write(

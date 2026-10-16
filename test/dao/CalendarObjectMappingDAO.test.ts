@@ -220,7 +220,7 @@ describe('CalendarObjectMappingDAO', () => {
 
 function seedApplication(database: DatabaseSync): void {
   database
-    .prepare('INSERT INTO users (email, created_at, updated_at, user_id, current_email) VALUES (?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO users (email, created_at, updated_at, id, current_email) VALUES (?, ?, ?, ?, ?)')
     .run('owner@example.com', 100, 100, 'user-1', 'owner@example.com');
   database
     .prepare(

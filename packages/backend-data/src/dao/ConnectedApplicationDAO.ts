@@ -23,7 +23,7 @@ class ConnectedApplicationDAO extends EncryptedDAO {
         `
           INSERT INTO connected_applications
             (application_id, user_id, user_email, provider_email, display_name, provider_id, connection_method, encrypted_credentials, credentials_iv, status, last_error, created_at, updated_at)
-          VALUES (?, ?, (SELECT email FROM users WHERE user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, (SELECT email FROM users WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
       )
       .bind(
@@ -174,7 +174,7 @@ class ConnectedApplicationDAO extends EncryptedDAO {
             SELECT application_id
             FROM connected_applications
             WHERE user_id IS NULL
-               OR user_id NOT IN (SELECT user_id FROM users WHERE user_id IS NOT NULL)
+               OR user_id NOT IN (SELECT id FROM users WHERE id IS NOT NULL)
             LIMIT ?
           )
         `,

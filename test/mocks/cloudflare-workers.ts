@@ -5,6 +5,11 @@
  * state and an environment, and nothing else. Re-exporting the class under the
  * same name it shadows is deliberate -- `AbstractDurableObjectWorker` extends the
  * real one, and the test needs it to be a real subclass.
+ *
+ * `WorkflowEntrypoint` is here for the same reason: the kit's
+ * `AbstractWorkflowWorker` extends it, so the class body is evaluated on import
+ * even in suites that never run a workflow. No test instantiates one, so the
+ * constructor shape (not the step semantics) is all that has to hold.
  */
 import type { DurableObject as CloudflareDurableObject } from 'cloudflare:workers';
 
@@ -18,6 +23,20 @@ class DurableObject<TEnv = Env> {
   }
 }
 
+class WorkflowEntrypoint<TEnv = Env> {
+  protected ctx: ExecutionContext;
+  protected env: TEnv;
+
+  constructor(ctx: ExecutionContext, env: TEnv) {
+    this.ctx = ctx;
+    this.env = env;
+  }
+
+  public async run(_event: unknown, _step: unknown): Promise<unknown> {
+    return undefined;
+  }
+}
+
 // The import above is type-only, so this is the value the mocked module yields.
 export type { CloudflareDurableObject };
-export { DurableObject };
+export { DurableObject, WorkflowEntrypoint };

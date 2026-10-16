@@ -18,7 +18,7 @@ function openDatabase(): { database: DatabaseSync; dao: ConnectedApplicationDAO 
   database.exec('PRAGMA foreign_keys = ON');
   applyMigrations(database);
   database
-    .prepare('INSERT INTO users (email, created_at, updated_at, user_id, current_email) VALUES (?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO users (email, created_at, updated_at, id, current_email) VALUES (?, ?, ?, ?, ?)')
     .run(OWNER, 100, 100, USER_ID, OWNER);
   database.prepare('INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (?, ?, 1, ?)').run(OWNER, USER_ID, 100);
   return { database, dao: new ConnectedApplicationDAO(asD1Queryable(database), MASTER_KEY) };
@@ -244,7 +244,7 @@ describe('ConnectedApplicationDAO', () => {
   it('reaps applications whose account is gone', async () => {
     await createApplication(dao);
     database.exec('PRAGMA foreign_keys = OFF');
-    database.prepare('DELETE FROM users WHERE user_id = ?').run(USER_ID);
+    database.prepare('DELETE FROM users WHERE id = ?').run(USER_ID);
     database.exec('PRAGMA foreign_keys = ON');
 
     // The cascade would normally handle this, so this is a backstop for a row

@@ -4,6 +4,7 @@ import { applyMigrations, splitSql } from '../helpers/migrations';
 
 const LAST_PRE_IDENTITY_MIGRATION = '0003_add_calendar_object_sync_state.sql';
 const IDENTITY_MIGRATION = '0004_decouple_user_identity.sql';
+const LAST_PRE_CONVERGE_MIGRATION = '0005_calendar_sync_counter.sql';
 
 const ALICE = 'Alice@Example.com';
 const BOB = 'bob@example.com';
@@ -96,7 +97,7 @@ describe('user identity migration', () => {
     const legacy = database.prepare('SELECT * FROM users WHERE email = ?').get(ALICE) as Record<string, unknown>;
     // Proves the seed really is pre-identity, so a passing assertion cannot be
     // an artifact of an already-migrated database.
-    expect(legacy['user_id']).toBeUndefined();
+    expect(legacy['id']).toBeUndefined();
     expect(legacy['current_email']).toBeUndefined();
 
     applyMigrations(database, { from: IDENTITY_MIGRATION });
@@ -115,11 +116,11 @@ describe('user identity migration', () => {
   });
 
   it('gives every account a stable v4 user id', () => {
-    const rows = database.prepare('SELECT user_id FROM users').all() as Array<{ user_id: string }>;
+    const rows = database.prepare('SELECT id FROM users').all() as Array<{ id: string }>;
     expect(rows).toHaveLength(2);
-    for (const row of rows) expect(row.user_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    for (const row of rows) expect(row.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 
-    const ids = new Set(rows.map((row) => row.user_id));
+    const ids = new Set(rows.map((row) => row.id));
     expect(ids.size).toBe(2);
   });
 
@@ -141,10 +142,31 @@ describe('user identity migration', () => {
     const ddl = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get()?.sql as string;
     expect(ddl).toContain('email TEXT PRIMARY KEY');
 
-    // The legacy FK must still point at users.email, with the new one alongside
+    // The legacy FK still points at users.email, with the identity FK alongside
     // it -- dropping or repointing either would have required a table rebuild.
-    expect(foreignKeyTargets(database, 'connected_applications')).toEqual(['user_email -> users.email', 'user_id -> users.user_id']);
-    expect(foreignKeyTargets(database, 'user_emails')).toEqual(['user_id -> users.user_id']);
+    // 0006 renames the key column, and SQLite rewrites the child FK clauses
+    // with it, so both resolve against the migrated schema.
+    expect(foreignKeyTargets(database, 'connected_applications')).toEqual(['user_email -> users.email', 'user_id -> users.id']);
+    expect(foreignKeyTargets(database, 'user_emails')).toEqual(['user_id -> users.id']);
+  });
+
+  it("converges the users table on the kit's identity vocabulary", () => {
+    const columns = (database.prepare('PRAGMA table_info(users)').all() as Array<Record<string, unknown>>).map((row) => String(row['name']));
+    expect(columns).toContain('id');
+    expect(columns).toContain('username');
+    expect(columns).not.toContain('user_id');
+
+    // The anchor survives 0006 untouched: the column values are what the legacy
+    // foreign key resolves against, not just the column name.
+    const alice = database.prepare('SELECT email FROM users WHERE email = ?').get(ALICE) as Record<string, string>;
+    expect(alice['email']).toBe(ALICE);
+
+    const indexNames = (table: string): string[] =>
+      (database.prepare(`PRAGMA index_list(${table})`).all() as Array<Record<string, unknown>>).map((row) => String(row['name']));
+    expect(indexNames('users')).toContain('idx_users_id');
+    expect(indexNames('users')).not.toContain('idx_users_user_id');
+    expect(indexNames('user_emails')).toContain('idx_user_emails_user');
+    expect(indexNames('user_emails')).not.toContain('idx_user_emails_user_id');
   });
 
   it('resolves every existing application to an account by user id', () => {
@@ -152,7 +174,7 @@ describe('user identity migration', () => {
       .prepare('SELECT application_id, user_email, user_id FROM connected_applications ORDER BY application_id')
       .all() as Array<{ application_id: string; user_email: string; user_id: string }>;
     const userIdOf = (email: string): string | null =>
-      (database.prepare('SELECT user_id FROM users WHERE email = ?').get(email) as { user_id: string } | undefined)?.user_id ?? null;
+      (database.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: string } | undefined)?.id ?? null;
 
     expect(rows.map((row) => [row.application_id, row.user_id])).toEqual([
       ['app-1', userIdOf(ALICE)],
@@ -179,7 +201,7 @@ describe('user identity migration', () => {
     expect(row['mappings']).toBe(1);
     expect(row['sessions']).toBe(1);
     expect(row['refresh']).toBe(1);
-    expect(row['user_id']).toBe(database.prepare('SELECT user_id FROM users WHERE email = ?').get(ALICE)?.['user_id']);
+    expect(row['user_id']).toBe(database.prepare('SELECT id FROM users WHERE email = ?').get(ALICE)?.['id']);
   });
 });
 
@@ -209,7 +231,9 @@ describe('user identity migration guards', () => {
 
   it('guards every backfill so re-running them changes nothing', () => {
     const database = openLegacyDatabase();
-    applyMigrations(database, { from: IDENTITY_MIGRATION });
+    // Stop before 0006: this mirrors 0004's guarded half, which speaks the
+    // pre-convergence column names.
+    applyMigrations(database, { from: IDENTITY_MIGRATION, to: LAST_PRE_CONVERGE_MIGRATION });
     const afterFirst = countRows(database);
     const idsBefore = database.prepare('SELECT user_id, current_email FROM users ORDER BY email').all();
     const registryBefore = database.prepare('SELECT email, user_id, is_verified FROM user_emails ORDER BY email').all();

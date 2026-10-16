@@ -17,7 +17,7 @@
   "dependencies": {
     "@caldav-bridge/backend-runtime": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/errors": "1.5.2"
+    "@rexezuge/errors": "1.9.1"
   },
   "devDependencies": {
     "@types/node": "26.6.x",

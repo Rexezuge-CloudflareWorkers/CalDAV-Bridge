@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { KIT_NO_EXTERNAL } from '@rexezuge/tooling/vitest';
 
 const srcPath = (relative: string): string => fileURLToPath(new URL(relative, import.meta.url));
 
@@ -21,14 +22,10 @@ const cloudflareWorkersMockPath = srcPath('test/mocks/cloudflare-workers.ts');
  * `@caldav-bridge/*` aliases point at source rather than at built output, so a
  * test exercises the code the worker would run without a build step.
  *
- * The `@rexezuge/*` packages are **not externalized**: the kit ships ESM
- * `dist/` with bundler-style extensionless relative imports (its own tsconfig
- * is `moduleResolution: Bundler`), which Node's ESM resolver refuses.
- * Vitest 4 externalizes `node_modules` deps by default and would import that
- * dist with Node; `noExternal` keeps them in Vite's pipeline — the same
- * resolver that bundles the worker and the SPA — so a test loads the very
- * dist the worker ships. Without this, the run dies on `./BaseDAO` inside
- * `@rexezuge/d1`'s `dist/index.js`.
+ * The `@rexezuge/*` packages stay inside Vite's pipeline (Vitest 4 would
+ * otherwise hand their `dist/` to Node's ESM resolver), which is the kit's own
+ * rule: `KIT_NO_EXTERNAL` is the kit's constant, not a copy of it, so the
+ * consumer and the kit's factories cannot drift.
  */
 export const sharedResolve = {
   alias: [
@@ -42,7 +39,7 @@ export const sharedResolve = {
     { find: /^@\//, replacement: `${apiSrcPath}/` },
     { find: /^~\//, replacement: `${webSrcPath}/` },
   ],
-  noExternal: [/(^|[/\\])@rexezuge\//],
+  noExternal: [...KIT_NO_EXTERNAL],
 };
 
 /**

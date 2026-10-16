@@ -15,7 +15,7 @@ function openDatabase(): DatabaseSync {
   database.exec('PRAGMA foreign_keys = ON');
   applyMigrations(database);
   database
-    .prepare('INSERT INTO users (email, created_at, updated_at, user_id, current_email) VALUES (?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO users (email, created_at, updated_at, id, current_email) VALUES (?, ?, ?, ?, ?)')
     .run('owner@example.com', 100, 100, 'user-1', 'owner@example.com');
   database
     .prepare(

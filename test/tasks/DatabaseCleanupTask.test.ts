@@ -98,6 +98,25 @@ describe('DatabaseCleanupTask', () => {
       oauth2AccessTokenRefreshStatus: 10,
     });
   });
+
+  it('runs through the kit handle and records the deleted total', async () => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const env = {
+      DB: fakeDatabase(vi.fn().mockResolvedValue({ meta: { changes: 10 } })),
+      AES_ENCRYPTION_KEY_SECRET: { get: vi.fn().mockResolvedValue('master-key') },
+    } as unknown as Env;
+
+    await new DatabaseCleanupTask().handle(
+      { cron: '0 3 * * *', scheduledTime: 1_000_000, noRetry: () => undefined },
+      env,
+      { waitUntil: () => undefined, passThroughOnException: () => undefined },
+    );
+
+    // The task records no run rows (`getTaskType()` is null), so the logged
+    // summary is the operator's only account of what the run deleted.
+    expect(consoleLog).toHaveBeenCalledWith('Database cleanup completed.', { totalDeleted: 55 });
+    consoleLog.mockRestore();
+  });
 });
 
 /**

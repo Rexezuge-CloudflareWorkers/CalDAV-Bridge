@@ -1,7 +1,7 @@
-import { AccessAuthError, authenticateAccess } from '@rexezuge/http';
-import { ServiceError, UnauthorizedError } from '@rexezuge/errors';
+import { authenticateAccess } from '@rexezuge/http';
+import { ServiceError } from '@rexezuge/errors';
+import type { ResolvedAccount } from '@rexezuge/identity';
 import { UserService } from '@caldav-bridge/backend-services/user';
-import type { UserIdentity } from '@caldav-bridge/backend-services/user';
 import { Context, Next } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -9,10 +9,10 @@ type UserContext = Context<{
   Bindings: Env;
   Variables: {
     /**
-     * The resolved account. Handlers key ownership on `userId` and display
-     * `currentEmail`, so neither depends on the address the request arrived with.
+     * The resolved account. Handlers key ownership on `id` and display `email`,
+     * so neither depends on the address the request arrived with.
      */
-    AuthenticatedUser: UserIdentity;
+    AuthenticatedUser: ResolvedAccount;
   };
 }>;
 
@@ -51,23 +51,21 @@ class MiddlewareHandlers {
         // The address is only an assertion at this point. Resolving it to an
         // account here is what lets an address change keep working: the request
         // is authorized against the account id, not the address it arrived with.
-        const identity = await new UserService(c.env).upsertUser(email);
-        c.set('AuthenticatedUser', identity);
+        const account = await new UserService(c.env).upsertUser(email);
+        c.set('AuthenticatedUser', account);
         await next();
       } catch (error: unknown) {
-        // AccessAuthError is deliberately not a ServiceError: a rejected address
-        // is not something a caller catches as one. It is translated here, at
-        // the boundary that knows a refusal is a 401, and then flows through the
-        // same mapping as any other client error.
-        const mapped: unknown =
-          error instanceof AccessAuthError ? new UnauthorizedError('Cloudflare Access authentication failed.') : error;
-        if (mapped instanceof ServiceError && mapped.status < 500) {
+        // A refused Access identity is a `ServiceError` now — the kit's
+        // `AccessAuthError` extends `UnauthorizedError` — so it flows through
+        // the same client-error mapping as any other refusal. There is no local
+        // translation left to make.
+        if (error instanceof ServiceError && error.status < 500) {
           // The kit's status is a plain number; hono's json() takes its
           // ContentfulStatusCode union, so the vetted status is narrowed
           // once, here, rather than at each of this repo's routes.
-          return c.json({ error: mapped.message }, mapped.status as ContentfulStatusCode);
+          return c.json({ error: error.message }, error.status as ContentfulStatusCode);
         }
-        throw mapped;
+        throw error;
       }
     };
   }

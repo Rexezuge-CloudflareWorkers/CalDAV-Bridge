@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { asD1Queryable } from '../helpers/d1';
 import { applyMigrations, splitSql } from '../helpers/migrations';
 import { UserDAO, UserEmailDAO } from '@caldav-bridge/backend-data/dao';
+import { newAnchor } from '@rexezuge/identity';
 
 const ALICE = 'alice@example.com';
 const BOB = 'bob@example.com';
@@ -14,13 +15,13 @@ function openDatabase(): DatabaseSync {
   return database;
 }
 
-function insertAccount(database: DatabaseSync, anchor: string, userId: string, currentEmail: string, now = 100): void {
+function insertAccount(database: DatabaseSync, anchor: string, id: string, currentEmail: string, now = 100): void {
   database
-    .prepare('INSERT INTO users (email, created_at, updated_at, user_id, current_email) VALUES (?, ?, ?, ?, ?)')
-    .run(anchor, now, now, userId, currentEmail);
+    .prepare('INSERT INTO users (email, created_at, updated_at, id, current_email) VALUES (?, ?, ?, ?, ?)')
+    .run(anchor, now, now, id, currentEmail);
   database
     .prepare('INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES (?, ?, 1, ?)')
-    .run(currentEmail.toLowerCase(), userId, now);
+    .run(currentEmail.toLowerCase(), id, now);
 }
 
 /**
@@ -37,7 +38,7 @@ function changeEmailStatements(userId: string, target: string, now = 500): strin
     `INSERT INTO user_emails (email, user_id, is_verified, created_at) VALUES ('${target}', '${userId}', 1, ${now})
      ON CONFLICT(email) DO UPDATE SET user_id = excluded.user_id, is_verified = excluded.is_verified`,
     // 2. move the account's current address
-    `UPDATE users SET current_email = '${target}', updated_at = ${now} WHERE user_id = '${userId}'`,
+    `UPDATE users SET current_email = '${target}', updated_at = ${now} WHERE id = '${userId}'`,
     // 3. revoke every other verified address for the account
     `UPDATE user_emails SET is_verified = 0 WHERE user_id = '${userId}' AND email != '${target}'`,
   ];
@@ -87,7 +88,7 @@ describe('change-email operations', () => {
 
     applyChangeEmailScript(database, userId, 'alice.new@example.com');
 
-    const account = database.prepare('SELECT email, current_email FROM users WHERE user_id = ?').get(userId) as Record<string, string>;
+    const account = database.prepare('SELECT email, current_email FROM users WHERE id = ?').get(userId) as Record<string, string>;
     expect(account['current_email']).toBe('alice.new@example.com');
     // The anchor is frozen: it is what the legacy foreign key resolves against.
     expect(account['email']).toBe(ALICE);
@@ -104,7 +105,7 @@ describe('change-email operations', () => {
 
     expect((await emailDAO.resolveVerified('alice.new@example.com'))?.user_id).toBe(userId);
     // The old address stays resolvable for attribution but can no longer sign in.
-    expect(await emailDAO.resolveVerified(ALICE)).toBeUndefined();
+    expect(await emailDAO.resolveVerified(ALICE)).toBeNull();
     expect((await emailDAO.get(ALICE))?.user_id).toBe(userId);
   });
 
@@ -128,7 +129,7 @@ describe('change-email operations', () => {
     // row owned by a different account and refuses rather than half-applying.
     insertAccount(database, BOB, 'bob-uuid', BOB);
     const emailDAO = new UserEmailDAO(asD1Queryable(database));
-    expect(await emailDAO.register({ email: BOB, userId: 'bob-uuid', isVerified: true })).toBe('already-claimed');
+    expect(await emailDAO.register({ email: BOB, userId: 'bob-uuid', isVerified: true, now: 100 })).toBe('already-claimed');
     expect((await emailDAO.resolveVerified(BOB))?.user_id).toBe('bob-uuid');
   });
 
@@ -141,7 +142,7 @@ describe('change-email operations', () => {
 
     expect(() => applyChangeEmailScript(database, 'alice-uuid', BOB)).toThrow(/constraint/i);
 
-    const alice = database.prepare('SELECT current_email FROM users WHERE user_id = ?').get('alice-uuid') as Record<string, string>;
+    const alice = database.prepare('SELECT current_email FROM users WHERE id = ?').get('alice-uuid') as Record<string, string>;
     expect(alice['current_email']).toBe(ALICE);
     expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   });
@@ -155,7 +156,7 @@ describe('change-email operations', () => {
 
     applyChangeEmailScript(database, userId, 'alice.new@example.com');
 
-    expect(await emailDAO.register({ email: ALICE, userId: 'bob-uuid', isVerified: true })).toBe('claimed');
+    expect(await emailDAO.register({ email: ALICE, userId: 'bob-uuid', isVerified: true, now: 500 })).toBe('claimed');
     expect((await emailDAO.resolveVerified(ALICE))?.user_id).toBe('bob-uuid');
     // Alice's applications are unaffected by the address changing hands.
     expect(database.prepare('SELECT user_id FROM connected_applications').get()?.['user_id']).toBe(userId);
@@ -167,7 +168,7 @@ describe('change-email operations', () => {
     applyChangeEmailScript(database, userId, 'alice.new@example.com');
     applyChangeEmailScript(database, userId, 'alice.new@example.com');
 
-    const account = database.prepare('SELECT email, current_email FROM users WHERE user_id = ?').get(userId) as Record<string, string>;
+    const account = database.prepare('SELECT email, current_email FROM users WHERE id = ?').get(userId) as Record<string, string>;
     expect(account['current_email']).toBe('alice.new@example.com');
     expect(account['email']).toBe(ALICE);
     expect(database.prepare('SELECT COUNT(*) AS c FROM user_emails WHERE user_id = ?').get(userId)?.c).toBe(2);
@@ -181,11 +182,12 @@ describe('change-email operations', () => {
 
     // Alice moved to an opaque anchor because `alice@example.com` is now Bob's
     // sign-in address, and the anchor column cannot be reused.
-    const taken = await userDAO.insertIfAbsent(ALICE, ALICE);
-    expect(taken).toBeUndefined();
-    const fresh = await userDAO.insertIfAbsent(UserDAO.newAnchor(), ALICE);
-    expect(fresh?.user_id).toBeTruthy();
-    expect(fresh?.user_id).not.toBe(userId);
-    expect(fresh?.current_email).toBe(ALICE);
+    const taken = await userDAO.createUser({ anchor: ALICE, loginEmail: ALICE, now: 500 });
+    expect(taken).toBeNull();
+    const fresh = await userDAO.createUser({ anchor: newAnchor(), loginEmail: ALICE, now: 500 });
+    expect(fresh).toBeTruthy();
+    const row = await userDAO.getById(fresh as string);
+    expect(row?.id).not.toBe(userId);
+    expect(row?.current_email).toBe(ALICE);
   });
 });

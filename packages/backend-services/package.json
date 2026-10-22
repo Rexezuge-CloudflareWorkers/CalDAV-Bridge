@@ -27,7 +27,7 @@
     "@caldav-bridge/shared": "workspace:*",
     "@rexezuge/d1": "1.9.1",
     "@rexezuge/errors": "1.9.1",
-    "@rexezuge/identity": "1.9.1",
+    "@rexezuge/identity": "1.9.2",
     "@rexezuge/shared": "1.9.1"
   },
   "devDependencies": {

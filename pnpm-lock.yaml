@@ -18,8 +18,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@rexezuge/identity':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/runtime':
         specifier: 1.9.2
         version: 1.9.2
@@ -129,8 +129,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@rexezuge/identity':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/runtime':
         specifier: 1.9.2
         version: 1.9.2
@@ -243,8 +243,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@rexezuge/identity':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/shared':
         specifier: 1.9.1
         version: 1.9.1
@@ -296,8 +296,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@rexezuge/identity':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/shared':
         specifier: 1.9.1
         version: 1.9.1
@@ -922,8 +922,8 @@ packages:
   '@rexezuge/http@1.9.1':
     resolution: {integrity: sha512-dhimHrZPW2Zv4/vYMu5+jAGcMPgdvLJdm+/tA9GY1EP0Wxn82a55KZOK1mmRALTsA7d00GKGNGbNZCKhOutPsQ==}
 
-  '@rexezuge/identity@1.9.1':
-    resolution: {integrity: sha512-m8Ichkk+d6WwaXKnNp071+Vn2+903SF/N6n9gAuBp3+Xs4Gk9N4kLhiHiTCumc77NKZq56Y2SyV0T7V5yU4CxQ==}
+  '@rexezuge/identity@1.9.2':
+    resolution: {integrity: sha512-ZcGO6tGBcNZDbVHsjryKskTyzrnjtt6ev8xNSltP9QAFBAwh3NxDcsSfOu18pG/SPP6v9JI12tI+WiwzRm87rg==}
 
   '@rexezuge/runtime@1.9.2':
     resolution: {integrity: sha512-OfAtxqhCpt9QON1pNBY0IyRc5xEeX3UlkBg5cS1cqzq6FKisL4a/jvV6dJDYZzWCcJAMxzPDfWS1JY3Nj2tbXw==}
@@ -3123,11 +3123,11 @@ snapshots:
       hono: 4.13.13
       jose: 6.2.12
 
-  '@rexezuge/identity@1.9.1':
+  '@rexezuge/identity@1.9.2':
     dependencies:
-      '@rexezuge/d1': 1.9.1
-      '@rexezuge/errors': 1.9.1
-      '@rexezuge/shared': 1.9.1
+      '@rexezuge/d1': 1.9.2
+      '@rexezuge/errors': 1.9.2
+      '@rexezuge/shared': 1.9.2
 
   '@rexezuge/runtime@1.9.2': {}
 

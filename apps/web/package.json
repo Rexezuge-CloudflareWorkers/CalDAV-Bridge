@@ -18,7 +18,7 @@
     "tailwind-merge": "3.7.0"
   },
   "devDependencies": {
-    "@rexezuge/tooling": "1.9.1",
+    "@rexezuge/tooling": "1.9.2",
     "@tailwindcss/vite": "^4.3.x",
     "@types/node": "26.6.x",
     "@types/react": "^19.3.x",

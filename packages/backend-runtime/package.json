@@ -21,7 +21,7 @@
   "dependencies": {
     "@caldav-bridge/shared": "workspace:*",
     "@rexezuge/errors": "1.9.1",
-    "@rexezuge/runtime": "1.9.1"
+    "@rexezuge/runtime": "1.9.2"
   },
   "devDependencies": {
     "@types/node": "26.6.x",

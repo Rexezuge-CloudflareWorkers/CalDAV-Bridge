@@ -20,7 +20,7 @@
   "devDependencies": {
     "@rexezuge/d1": "1.9.1",
     "@rexezuge/errors": "1.9.1",
-    "@rexezuge/http": "1.9.1",
+    "@rexezuge/http": "1.9.2",
     "@rexezuge/identity": "1.9.2",
     "@rexezuge/runtime": "1.9.2",
     "@rexezuge/shared": "1.9.1",

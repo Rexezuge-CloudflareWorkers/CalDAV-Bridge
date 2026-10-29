@@ -18,7 +18,7 @@
     "typegen": "wrangler types --config ./apps/api/wrangler.template.jsonc --env-interface CloudflareEnv"
   },
   "devDependencies": {
-    "@rexezuge/d1": "1.9.1",
+    "@rexezuge/d1": "1.9.2",
     "@rexezuge/errors": "1.9.1",
     "@rexezuge/http": "1.9.1",
     "@rexezuge/identity": "1.9.2",

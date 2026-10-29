@@ -15,8 +15,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@rexezuge/http':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/identity':
         specifier: 1.9.2
         version: 1.9.2
@@ -126,8 +126,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       '@rexezuge/http':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/identity':
         specifier: 1.9.2
         version: 1.9.2
@@ -916,8 +916,8 @@ packages:
   '@rexezuge/errors@1.9.2':
     resolution: {integrity: sha512-2LBY01Ly8ZJH8YF3pqTfYGFF56WslywFiC3HeeEXSBSD0nKXA6WsELUa/xPbMXIhKnVz8z+UtgshuHsHlSMOeg==}
 
-  '@rexezuge/http@1.9.1':
-    resolution: {integrity: sha512-dhimHrZPW2Zv4/vYMu5+jAGcMPgdvLJdm+/tA9GY1EP0Wxn82a55KZOK1mmRALTsA7d00GKGNGbNZCKhOutPsQ==}
+  '@rexezuge/http@1.9.2':
+    resolution: {integrity: sha512-kykFRPtAb/zWc81h3SEb78QAgezlTIqK8HUwsAvQ7bsaJ9M//iwZ+P3Vbk150pv/ouGtO7iOLZenn5HcDGcJIA==}
 
   '@rexezuge/identity@1.9.2':
     resolution: {integrity: sha512-ZcGO6tGBcNZDbVHsjryKskTyzrnjtt6ev8xNSltP9QAFBAwh3NxDcsSfOu18pG/SPP6v9JI12tI+WiwzRm87rg==}
@@ -1882,8 +1882,8 @@ packages:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
 
-  jose@6.2.12:
-    resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
+  jose@6.2.13:
+    resolution: {integrity: sha512-7TIg10ZE1x82YediN+lcrPNvGMKge9yFHQD+Qho/b8y2adfugU3AsvvHfxV0fzyFllT6l9xCjf4RWY9g/Z9PJQ==}
 
   js-tokens@10.0.0:
     resolution: {integrity: sha512-lM/UBzQmfJRo9ABXbPWemivdCW8V2G8FHaHdypQaIy523snUjog0W71ayWXTjiR+ixeMyVHN2XcpnTd/liPg/Q==}
@@ -2152,8 +2152,8 @@ packages:
     resolution: {integrity: sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q==}
     engines: {node: '>=12.20.0'}
 
-  openapi3-ts@4.6.1:
-    resolution: {integrity: sha512-XW9MOldkhoICNeXVzzmXzmOW5G73ppOEGmh7fLCqHjgfdEYCGGN+00MlVCeUZgovjjfC56j9tvtDt1zGabNjjA==}
+  openapi3-ts@4.6.2:
+    resolution: {integrity: sha512-gyyil3DweqhXiEhTqtAs9wwRLfWHmetwhI4kmM5Rn0d6gtmK863Ki7qqbQnp9+Wwlqoe3B1LFWj7kMp5ctE4rQ==}
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -2654,7 +2654,7 @@ snapshots:
 
   '@asteasolutions/zod-to-openapi@8.5.0(zod@4.6.7)':
     dependencies:
-      openapi3-ts: 4.6.1
+      openapi3-ts: 4.6.2
       zod: 4.6.7
 
   '@babel/code-frame@7.29.7':
@@ -3111,13 +3111,13 @@ snapshots:
 
   '@rexezuge/errors@1.9.2': {}
 
-  '@rexezuge/http@1.9.1':
+  '@rexezuge/http@1.9.2':
     dependencies:
-      '@rexezuge/errors': 1.9.1
-      '@rexezuge/shared': 1.9.1
+      '@rexezuge/errors': 1.9.2
+      '@rexezuge/shared': 1.9.2
       chanfana: 3.4.0
-      hono: 4.13.13
-      jose: 6.2.12
+      hono: 4.13.14
+      jose: 6.2.13
 
   '@rexezuge/identity@1.9.2':
     dependencies:
@@ -3724,7 +3724,7 @@ snapshots:
     dependencies:
       '@asteasolutions/zod-to-openapi': 8.5.0(zod@4.6.7)
       js-yaml: 4.3.2
-      openapi3-ts: 4.6.1
+      openapi3-ts: 4.6.2
       yargs-parser: 22.0.0
       zod: 4.6.7
 
@@ -4196,7 +4196,7 @@ snapshots:
 
   jiti@2.7.0: {}
 
-  jose@6.2.12: {}
+  jose@6.2.13: {}
 
   js-tokens@10.0.0: {}
 
@@ -4396,7 +4396,7 @@ snapshots:
 
   obug@2.2.1: {}
 
-  openapi3-ts@4.6.1:
+  openapi3-ts@4.6.2:
     dependencies:
       yaml: 2.9.1
 

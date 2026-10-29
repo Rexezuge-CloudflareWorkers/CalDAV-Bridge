@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@rexezuge/d1':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/errors':
         specifier: 1.9.1
         version: 1.9.1
@@ -120,8 +120,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@rexezuge/d1':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/errors':
         specifier: 1.9.1
         version: 1.9.1
@@ -163,8 +163,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@rexezuge/d1':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/errors':
         specifier: 1.9.1
         version: 1.9.1
@@ -237,8 +237,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/d1':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/errors':
         specifier: 1.9.1
         version: 1.9.1
@@ -290,8 +290,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@rexezuge/d1':
-        specifier: 1.9.1
-        version: 1.9.1
+        specifier: 1.9.2
+        version: 1.9.2
       '@rexezuge/errors':
         specifier: 1.9.1
         version: 1.9.1
@@ -906,9 +906,6 @@ packages:
 
   '@poppinss/exception@1.2.3':
     resolution: {integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==}
-
-  '@rexezuge/d1@1.9.1':
-    resolution: {integrity: sha512-uyL0QWzhC09wjs/hAKova5u26CceizW584WjfbUKDUwTI6k1TM0A7BRht0XVTMY4xIGzJmoLZbmVJxZ4n8BlNw==}
 
   '@rexezuge/d1@1.9.2':
     resolution: {integrity: sha512-/9YPjn2WEKs53iY3upw7Yix6w4ANw6+CqhebuMVWqCOcoMSVd510JnQgQhGa2LqXOKqXEbkmDxjZopfVrD9aiw==}
@@ -3104,11 +3101,6 @@ snapshots:
       supports-color: 10.2.2
 
   '@poppinss/exception@1.2.3': {}
-
-  '@rexezuge/d1@1.9.1':
-    dependencies:
-      '@rexezuge/errors': 1.9.1
-      '@rexezuge/shared': 1.9.1
 
   '@rexezuge/d1@1.9.2':
     dependencies:

@@ -12,7 +12,7 @@
     "@caldav-bridge/backend-services": "workspace:*",
     "@caldav-bridge/background": "workspace:*",
     "@caldav-bridge/shared": "workspace:*",
-    "@rexezuge/d1": "1.9.1",
+    "@rexezuge/d1": "1.9.2",
     "@rexezuge/errors": "1.9.1",
     "@rexezuge/http": "1.9.1",
     "@rexezuge/identity": "1.9.2",

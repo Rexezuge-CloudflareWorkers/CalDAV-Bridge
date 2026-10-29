@@ -30,8 +30,8 @@ importers:
         specifier: 1.9.2
         version: 1.9.2(eslint-config-prettier@10.1.8(eslint@10.12.0(jiti@2.7.0)))(eslint-plugin-prettier@5.5.7(eslint-config-prettier@10.1.8(eslint@10.12.0(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0))(prettier@3.9.10))(eslint-plugin-regexp@3.3.1(eslint@10.12.0(jiti@2.7.0)))(eslint-plugin-sonarjs@4.2.2(eslint@10.12.0(jiti@2.7.0)))(eslint-plugin-unicorn@76.0.0(eslint@10.12.0(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0))(globals@17.13.0)(jsonc-parser@3.3.1)(prettier@3.9.10)(typescript-eslint@8.71.1(eslint@10.12.0(jiti@2.7.0))(typescript@6.0.3))(typescript@6.0.3)(vitest@4.1.11)
       '@rexezuge/web':
-        specifier: 1.9.1
-        version: 1.9.1(lucide-react@1.59.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 1.9.2
+        version: 1.9.2(lucide-react@1.59.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2
@@ -185,8 +185,8 @@ importers:
   apps/web:
     dependencies:
       '@rexezuge/web':
-        specifier: 1.9.1
-        version: 1.9.1(lucide-react@1.59.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 1.9.2
+        version: 1.9.2(lucide-react@1.59.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -950,8 +950,8 @@ packages:
       typescript-eslint: ^8.0.0
       vitest: ^4.0.0
 
-  '@rexezuge/web@1.9.1':
-    resolution: {integrity: sha512-QnBkS15WBTVzN8DNh04gMrCMfF7aVSoPkkb/M/I6xVUSoxB0xMddoPeGWfbQDknGlMht35ePaiMPoEu7AIbwng==}
+  '@rexezuge/web@1.9.2':
+    resolution: {integrity: sha512-/t80lrU5IgbF23/25lnHRXQVoOGisjKjha7vzpHnTgzt1b/VdKX+tmr+tNuGYzyjB1aC2pD4+U7K9V71EofvzA==}
     peerDependencies:
       lucide-react: ^1.49.0
       react: ^19.3.0
@@ -3171,10 +3171,10 @@ snapshots:
       typescript-eslint: 8.72.1(eslint@10.13.0(jiti@2.7.0))(typescript@6.0.3)
       vitest: 4.1.12(@types/node@26.6.5)(@vitest/coverage-v8@4.1.11(vitest@4.1.11))(happy-dom@21.0.1)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
 
-  '@rexezuge/web@1.9.1(lucide-react@1.59.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@rexezuge/web@1.9.2(lucide-react@1.59.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@rexezuge/errors': 1.9.1
-      '@rexezuge/shared': 1.9.1
+      '@rexezuge/errors': 1.9.2
+      '@rexezuge/shared': 1.9.2
       lucide-react: 1.59.0(@types/react@19.3.0)(react@19.3.0)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
